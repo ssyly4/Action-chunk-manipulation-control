@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline A/B probe for OpenPI Real-Time Chunking. No robot APIs are used."""
+"""Offline probe for OpenPI Real-Time Chunking. No robot APIs are used."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ import sys
 import numpy as np
 
 
-NERO_WS = Path("/home/dev/nero_ws")
-if str(NERO_WS) not in sys.path:
-    sys.path.insert(0, str(NERO_WS))
+CONTROL_ROOT = Path(__file__).resolve().parents[3]
+if str(CONTROL_ROOT) not in sys.path:
+    sys.path.insert(0, str(CONTROL_ROOT))
 
 from nero_vla.image_tools import resize_with_pad
 from nero_vla.policy_client import OpenPiPolicyClient, port_open

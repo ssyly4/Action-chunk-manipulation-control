@@ -1,4 +1,4 @@
-"""Process-local command-state bridge for the TOPPRA A/B runtime."""
+"""Process-local command-state bridge for the TOPPRA runtime."""
 
 from __future__ import annotations
 

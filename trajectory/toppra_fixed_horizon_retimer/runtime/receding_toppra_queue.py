@@ -1,4 +1,4 @@
-"""Experimental receding TOPPRAsd queue for process-local production A/B.
+"""Receding TOPPRAsd queue for the process-local production runtime.
 
 The queue keeps the production RTC public interface, but all implementation
 and dependencies remain outside nero_ws.  It never accesses CAN directly.
@@ -435,7 +435,7 @@ class RecedingToppraRtcQueue:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log = self.log_path.open("a", encoding="utf-8")
         print(
-            "[TOPPRA AB] receding queue: "
+            "[TOPPRA] receding queue: "
             f"rate={self.action_hz:.1f}Hz "
             f"retimer_limits={np.rad2deg(self.max_velocity):.1f}deg/s/"
             f"{np.rad2deg(self.max_acceleration):.1f}deg/s2 "
@@ -474,7 +474,7 @@ class RecedingToppraRtcQueue:
 
     def handoff_errors_rad(self, actions: np.ndarray, *, skip_steps: int = 0) -> np.ndarray:
         # The production stream asks this before the candidate has gone through
-        # TOPPRA. In this isolated A/B runtime the raw chunk is diagnostic only;
+        # TOPPRA. In this process-local runtime the raw chunk is diagnostic only;
         # the single authoritative guard runs after retiming against live q/qd.
         self._raw_handoff_errors_rad(actions, skip_steps=skip_steps)
         return np.zeros(2, dtype=np.float64)
@@ -723,7 +723,7 @@ class RecedingToppraRtcQueue:
             if wait_for_commit:
                 if not ready.commit_wait_logged:
                     print(
-                        "[TOPPRA AB] "
+                        "[TOPPRA] "
                         f"generation={ready.generation} ready_waiting_minimum_commit "
                         f"committed={committed_ticks}/{self.minimum_commit_ticks}tick"
                     )
@@ -734,7 +734,7 @@ class RecedingToppraRtcQueue:
                 and committed_ticks < self.minimum_commit_ticks
             ):
                 print(
-                    "[TOPPRA AB] "
+                    "[TOPPRA] "
                     f"generation={ready.generation} commit_gate_bypassed_low_reserve "
                     f"committed={committed_ticks}/{self.minimum_commit_ticks}tick "
                     f"reserve={reserve_ticks}"
@@ -1041,7 +1041,7 @@ class RecedingToppraRtcQueue:
             )
             contract = f"fallback(v={velocity_text} a={acceleration_text})"
         print(
-            f"[TOPPRA AB] generation={decision.generation} {decision.action} "
+            f"[TOPPRA] generation={decision.generation} {decision.action} "
             f"attempt={decision.evaluation_attempt} retime={decision.retime_status} "
             f"contract={contract} {decision.retime_ms:.1f}ms "
             f"gain={decision.action_gain:.3f} "
@@ -1062,7 +1062,7 @@ class RecedingToppraRtcQueue:
                 return f"{name}=q{value['q_max_deg']:.2f}deg/v{value['v_max_deg_s']:.1f}deg/s"
 
             print(
-                "[TOPPRA AB] handoff layers "
+                "[TOPPRA] handoff layers "
                 f"{text('rtc_raw')} {text('action_gain')} "
                 f"{text('casadi_retimed')} {text('handoff_target')} "
                 f"raw_index={layers['meta']['raw_action_index']:.0f} "

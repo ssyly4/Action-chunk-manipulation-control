@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 export NERO_POLICY_CONFIG=pi05_nero_towel_fullflow70_releasecrop_tailpush30_next_feedback_event4_h24_v1
 export NERO_POLICY_CHECKPOINT=119999
 export NERO_POLICY_SOURCE=/home/dev/workspace/nero_training/checkpoints/pi05_nero_towel_fullflow70_releasecrop_tailpush30_next_feedback_event4_h24_v1/lora_micro120000_towel_fullflow70_releasecrop_tailpush30_next_feedback_h24_eff4_v1/119999
-export NERO_POLICY_STAGE_NAME=nero_towel_fullflow70_releasecrop_tailpush30_h24_30000_osqp_casadi_ab
+export NERO_POLICY_STAGE_NAME=nero_towel_fullflow70_releasecrop_tailpush30_h24_30000_osqp_casadi
 export NERO_POLICY_PROMPT='fold the towel'
 export NERO_POLICY_WARMUP="${NERO_POLICY_WARMUP:-1}"
 
@@ -50,7 +50,7 @@ for arg in "$@"; do
   fi
 done
 
-exec "$ROOT/run_policy_trial_osqp_casadi.sh" \
+exec "$ROOT/run_policy.sh" \
   --action-horizon 24 --duration "${NERO_POLICY_DURATION:-30}" \
   --chunk-mode rtc_time --rtc-execution-horizon 12 --rtc-queue-threshold 22 \
   --rtc-action-hz 30 --rtc-handoff-decay-steps 0 \

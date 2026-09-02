@@ -7,7 +7,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 TOPPRA_ROOT = ROOT.parent / "toppra_fixed_horizon_retimer"
-TOPPRA_RUNTIME = TOPPRA_ROOT / "ab_runtime"
+TOPPRA_RUNTIME = TOPPRA_ROOT / "runtime"
 for path in (ROOT / "vendor", ROOT, TOPPRA_ROOT / "vendor", TOPPRA_ROOT, TOPPRA_RUNTIME):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
@@ -28,7 +28,7 @@ from receding_toppra_queue import (
 
 
 class RecedingCasadiRtcQueue(RecedingToppraRtcQueue):
-    """CasADi phase optimization with the proven TOPPRA A/B queue contract."""
+    """CasADi phase optimization using the shared TOPPRA queue contract."""
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -50,7 +50,7 @@ class RecedingCasadiRtcQueue(RecedingToppraRtcQueue):
             )
         )
         print(
-            "[CASADI AB] fixed-horizon phase optimizer: "
+            "[CASADI] fixed-horizon phase optimizer: "
             f"jerk={np.rad2deg(self.max_jerk):.0f}deg/s3 "
             f"solve_timeout={self.max_solve_sec * 1000:.0f}ms "
             "warm_start=primal+dual"

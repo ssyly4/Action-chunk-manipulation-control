@@ -5,9 +5,9 @@
 ```text
 nero_bimanual_control/
   nero_vla/                 CPV 后端、CAN 检查、follower、策略客户端
-  scripts/bimanual_policy/  原生策略服务与实机启动器
+  scripts/bimanual_policy/  策略服务与正式运行器的基础编排层
   trajectory/
-    osqp_waypoint_smoother/ 关节轨迹点平滑 A/B 层
+    osqp_waypoint_smoother/ 关节轨迹点平滑运行时
     casadi_fixed_horizon_retimer/ 固定时域相位优化器
     toppra_fixed_horizon_retimer/ 路径重定时与连续交接
   server_staging/           训练服务器 OpenPI 部署辅助脚本

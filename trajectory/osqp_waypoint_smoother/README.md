@@ -1,6 +1,6 @@
 # OSQP 固定时域轨迹点平滑器
 
-这是当前实验性实机运行时入口。它不直接修改维护中的 Pi0.5、RTC、follower 或 CPV 源码；A/B 适配器只在被启动的进程内替换 action queue 和 follower。
+这是当前正式实机运行时入口。它复用维护中的 Pi0.5、RTC、follower 和 CPV 基础代码，并在启动进程内加载正式的 action queue 与 follower 扩展。
 
 完整的受支持实机命令和参数归属见 [`../../docs/CURRENT_CONTROL_STACK.md`](../../docs/CURRENT_CONTROL_STACK.md)。
 
@@ -57,7 +57,7 @@ chmod +x run_tests.sh scripts/smooth_chunk.py
 
 输出报告会包含原始与平滑后速度、加速度、jerk 比率，以及最大轨迹点偏离。只有离线指标显示可行性改善且轨迹偏离可接受时，才应接入 CasADi。
 
-## 隔离的实机 A/B
+## 实机运行时
 
 运行时链路保持与原生 follower 隔离：
 
@@ -69,7 +69,7 @@ chmod +x run_tests.sh scripts/smooth_chunk.py
 
 真实 commit 边界仍优先使用原始候选。只有原始候选超过 q/v 硬交接限制或无法构造有界 q/v/a correction，而恢复候选可以时，才选择恢复候选。运行日志中的 `gain=bypassed`、`gain=fallback:<value>` 与 `handoff_candidate=recovery` 用于区分路径。
 
-当前 A/B 启动器使用 8 tick 最小提交与 8 tick 重规划余量。如果原始候选和恢复候选都无法安全交接，会在重规划边界丢弃候选并发送新的 RTC 请求；此路径明确禁用旧的 `reserve_exhaustion_follower_handoff`，不会在旧轨迹耗尽后强制进行无界 follower 接管。
+当前启动器使用 8 tick 最小提交与 8 tick 重规划余量。如果原始候选和恢复候选都无法安全交接，会在重规划边界丢弃候选并发送新的 RTC 请求；此路径明确禁用旧的 `reserve_exhaustion_follower_handoff`，不会在旧轨迹耗尽后强制进行无界 follower 接管。
 
 适配器只在自身进程中替换 RTC queue，原生策略流源码保持不变：
 
@@ -81,7 +81,7 @@ NERO_POLICY_DURATION=30 \
 
 预检通过后去掉 `--preflight-only` 才会启动实机。默认运行时把跨 chunk 连续性交给既有 q/v 交接；`NERO_OSQP_ENFORCE_BOUNDARY=1` 仅用于单独的严格边界实验。
 
-## 已录制策略的 A/B 回放
+## 已录制策略回放
 
 在不连接实机的情况下，对比原始到 CasADi 路径与 OSQP 到 CasADi 路径：
 

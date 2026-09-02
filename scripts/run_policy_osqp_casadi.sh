@@ -8,4 +8,4 @@ if [[ -f "$LOCAL_PATHS" ]]; then
   source "$LOCAL_PATHS"
 fi
 
-exec "$CONTROL_ROOT/trajectory/osqp_waypoint_smoother/ab_runtime/run_30k_osqp_casadi.sh" "$@"
+exec "$CONTROL_ROOT/trajectory/osqp_waypoint_smoother/runtime/launch_policy.sh" "$@"

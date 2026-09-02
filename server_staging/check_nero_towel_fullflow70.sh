@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT=/home/dev/workspace/nero_training
-LOG_DIR="$ROOT/logs/fullflow70_ab"
+LOG_DIR="$ROOT/logs/fullflow70"
 
 echo "host_time=$(date --iso-8601=seconds)"
 echo "master_status=$(cat "$LOG_DIR/master.status" 2>/dev/null || echo NOT_STARTED)"

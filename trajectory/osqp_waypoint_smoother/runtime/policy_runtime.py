@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TRAJECTORY_ROOT = ROOT.parent
 CONTROL_ROOT = TRAJECTORY_ROOT.parent
 CASADI_ROOT = TRAJECTORY_ROOT / "casadi_fixed_horizon_retimer"
-TOPPRA_RUNTIME = TRAJECTORY_ROOT / "toppra_fixed_horizon_retimer" / "ab_runtime"
+TOPPRA_RUNTIME = TRAJECTORY_ROOT / "toppra_fixed_horizon_retimer" / "runtime"
 ARM_SDK_ROOT = Path(os.environ.get("NERO_ARM_SDK_ROOT", "/home/dev/nero_ws/src/pyAgxArm"))
 PRODUCTION_STREAM = CONTROL_ROOT / "scripts/bimanual_policy/bimanual_guarded_policy_stream.py"
 for path in reversed(
@@ -20,7 +20,7 @@ for path in reversed(
         Path(__file__).resolve().parent,
         CASADI_ROOT / "vendor",
         CASADI_ROOT,
-        CASADI_ROOT / "ab_runtime",
+        CASADI_ROOT / "runtime",
         TOPPRA_RUNTIME.parent / "vendor",
         TOPPRA_RUNTIME.parent,
         TOPPRA_RUNTIME,
@@ -43,7 +43,7 @@ from osqp_casadi_rtc_queue import RecedingOsqpCasadiRtcQueue
 
 def main() -> None:
     spec = importlib.util.spec_from_file_location(
-        "nero_production_stream_osqp_casadi_ab", PRODUCTION_STREAM
+        "nero_production_stream_osqp_casadi", PRODUCTION_STREAM
     )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Could not load production stream: {PRODUCTION_STREAM}")
@@ -82,8 +82,8 @@ def main() -> None:
 
     module.RateLimitedJointFollower = OsqpCasadiJerkLimitedFollower
     print(
-        "[OSQP+CASADI AB] production source unchanged; "
-        "queue and follower replaced in this process only"
+        "[OSQP+CASADI] loading the base policy stream with the "
+        "production trajectory runtime"
     )
     module.main()
 

@@ -17,10 +17,10 @@ for path in reversed(
         ROOT,
         CASADI_ROOT / "vendor",
         CASADI_ROOT,
-        CASADI_ROOT / "ab_runtime",
+        CASADI_ROOT / "runtime",
         TOPPRA_ROOT / "vendor",
         TOPPRA_ROOT,
-        TOPPRA_ROOT / "ab_runtime",
+        TOPPRA_ROOT / "runtime",
     )
 ):
     if str(path) not in sys.path:
@@ -112,7 +112,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             )
         )
         print(
-            "[OSQP+CASADI AB] bounded waypoint smoother: "
+            "[OSQP+CASADI] bounded waypoint smoother: "
             f"trust={np.rad2deg(self.osqp_trust_region):.3f}deg "
             f"boundary={'q/v' if self.osqp_enforce_boundary else 'handoff-owned'} "
             "action_gain=precomputed-handoff-recovery"
@@ -480,7 +480,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
                 )
 
         print(
-            f"[OSQP+CASADI AB] generation={generation} "
+            f"[OSQP+CASADI] generation={generation} "
             f"osqp={primary_smoothed.status} {primary_smoothed.solve_ms:.2f}ms "
             f"gain={'fallback:' + format(primary_gain.gain, '.3f') if action_gain_fallback else 'bypassed'} "
             f"recovery={recovery_text} "
@@ -677,7 +677,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
                     and recovery_blendable
                 ):
                     print(
-                        "[OSQP+CASADI AB] "
+                        "[OSQP+CASADI] "
                         f"generation={ready.generation} handoff_candidate=recovery "
                         f"reason={recovery_reason} "
                         f"gain={ready.recovery_action_gain.gain:.3f} "

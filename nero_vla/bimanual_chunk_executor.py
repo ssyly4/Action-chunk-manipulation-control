@@ -358,7 +358,7 @@ class BimanualFixedHorizonActionChunk:
     """Execute a fixed prefix of one bimanual action chunk at its native rate.
 
     This is deliberately separate from feedback-phase alignment.  It is an
-    A/B executor for policy evaluation: all arm and gripper targets use the
+    Fixed-horizon executor for policy evaluation: all arm and gripper targets use the
     same integer action index. Phase advances once per control-loop sample,
     rather than from a floating wall-clock estimate. A short arm-only blend
     may smooth chunk handoffs; grippers always retain the exact action index.

@@ -5,7 +5,7 @@
 ## 当前接口
 
 - `fixed_phase_optimizer/optimizer.py`：`CasadiPhaseOptimizer` 与 `PhaseOptimizerConfig`。
-- `ab_runtime/casadi_rtc_queue.py`：当前 OSQP 运行时继承的队列适配层。
+- `runtime/casadi_rtc_queue.py`：当前 OSQP 运行时继承的队列适配层。
 - `tests/`：固定时域、可行性与 warm-start 覆盖。
 
 在本目录运行测试：

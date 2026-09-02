@@ -13,7 +13,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTROL_ROOT = ROOT.parents[1]
-for path in (ROOT / "vendor", ROOT, ROOT / "ab_runtime", CONTROL_ROOT):
+for path in (ROOT / "vendor", ROOT, ROOT / "runtime", CONTROL_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

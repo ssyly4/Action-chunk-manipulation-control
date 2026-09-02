@@ -24,7 +24,7 @@ PROMPT="${NERO_POLICY_PROMPT:-fold the towel}"
 export OPENBLAS_NUM_THREADS=1
 export OMP_NUM_THREADS=1
 export MPLCONFIGDIR=/tmp/matplotlib-osqp-casadi-retimer
-AB_PYTHONPATH="$ROOT/../vendor:$ROOT/..:$ROOT:$CASADI_ROOT/vendor:$CASADI_ROOT:$CASADI_ROOT/ab_runtime:$TOPPRA_ROOT/vendor:$TOPPRA_ROOT:$TOPPRA_ROOT/ab_runtime:$CONTROL_ROOT:$ARM_SDK_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+RUNTIME_PYTHONPATH="$ROOT/../vendor:$ROOT/..:$ROOT:$CASADI_ROOT/vendor:$CASADI_ROOT:$CASADI_ROOT/runtime:$TOPPRA_ROOT/vendor:$TOPPRA_ROOT:$TOPPRA_ROOT/runtime:$CONTROL_ROOT:$ARM_SDK_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 execute=0
 for arg in "$@"; do
@@ -52,29 +52,29 @@ common=(
 )
 
 if [[ "$execute" == 0 ]]; then
-  exec env PYTHONPATH="$AB_PYTHONPATH" \
-    "$PYTHON" "$ROOT/bimanual_guarded_policy_stream_osqp_casadi.py" \
+  exec env PYTHONPATH="$RUNTIME_PYTHONPATH" \
+    "$PYTHON" "$ROOT/policy_runtime.py" \
     "${common[@]}" --preflight-only "$@"
 fi
 
 if [[ "${NERO_POLICY_SKIP_HOME:-0}" != 1 ]]; then
-  echo "[TRIAL] returning both arms to demonstration Home before OSQP+CasADi A/B"
+  echo "[TRIAL] returning both arms to demonstration Home before OSQP+CasADi control"
   "$TELEOP_ROOT/scripts/control/run_dual_home.sh" --execute
 fi
 
 set +e
-env PYTHONPATH="$AB_PYTHONPATH" \
-  "$PYTHON" "$ROOT/bimanual_guarded_policy_stream_osqp_casadi.py" \
+env PYTHONPATH="$RUNTIME_PYTHONPATH" \
+  "$PYTHON" "$ROOT/policy_runtime.py" \
   "${common[@]}" --confirm 'RUN GUARDED BIMANUAL POLICY' "$@"
 status=$?
 set -e
 
 if [[ "$status" != 0 ]]; then
-  echo "[TRIAL] OSQP+CasADi A/B failed (exit=$status); automatic Home is disabled" >&2
+  echo "[TRIAL] OSQP+CasADi control failed (exit=$status); automatic Home is disabled" >&2
   exit "$status"
 fi
 
 if [[ "${NERO_POLICY_SKIP_HOME:-0}" != 1 ]]; then
-  echo "[TRIAL] OSQP+CasADi A/B succeeded; returning both arms Home"
+  echo "[TRIAL] OSQP+CasADi control succeeded; returning both arms Home"
   "$TELEOP_ROOT/scripts/control/run_dual_home.sh" --execute
 fi
