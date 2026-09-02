@@ -1,5 +1,3 @@
-# Superseded Direct TOPPRA Runtime
+# 已替代的直接 TOPPRA 运行时
 
-These runners record earlier direct TOPPRA A/B experiments. The active system
-uses only `receding_toppra_queue.py` and `follower_state_bridge.py` through the
-OSQP + CasADi runtime. Do not run these historical launchers on hardware.
+这些启动器记录了早期直接使用 TOPPRA 的 A/B 实验。当前系统只通过 OSQP + CasADi 运行时使用 `receding_toppra_queue.py` 和 `follower_state_bridge.py`。不要在实机上运行本目录中的历史启动器。

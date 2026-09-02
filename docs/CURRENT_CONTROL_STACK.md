@@ -1,71 +1,63 @@
-# Current Control Stack
+# 当前控制栈
 
-## Ownership
+## 运行链路
 
-The running physical-policy path has three local layers:
+当前实机策略控制链由以下模块组成：
 
 ```text
-policy WebSocket output (24 x 16 action chunk)
-  -> OSQP bounded waypoint smoother
-  -> CasADi fixed-horizon phase retimer
-  -> shared receding RTC queue and q/v/a handoff
-  -> NERO streaming joint follower
-  -> CPV backend -> CAN -> two NERO arms
+策略 WebSocket 输出（24 x 16 action chunk）
+  -> OSQP 有界轨迹点平滑
+  -> CasADi 固定时域相位重定时
+  -> 共享的滚动 RTC 队列与 q/v/a 连续交接
+  -> NERO 流式关节 follower
+  -> CPV 后端 -> CAN -> NERO 双臂
 ```
 
-`osqp_waypoint_smoother/ab_runtime/run_30k_osqp_casadi.sh` is the only active
-physical launcher in this workspace. Its small set of environment variables is
-the supported tuning surface:
+当前实机 A/B 入口为 `scripts/run_policy_osqp_casadi.sh`。以下环境变量是受支持的调参接口：
 
-| Variable | Default | Meaning |
+| 变量 | 默认值 | 含义 |
 |---|---:|---|
-| `NERO_POLICY_DURATION` | `30` s | Trial duration |
-| `NERO_FOLLOWER_MAX_VELOCITY_DEG_S` | `28` | Joint follower speed limit |
-| `NERO_FOLLOWER_MAX_ACCELERATION_DEG_S2` | `280` | Joint follower acceleration limit |
-| `NERO_FOLLOWER_GOVERNOR_ERROR_DEG` | `1.50` | Soft command-feedback lead limit |
-| `NERO_FOLLOWER_HARD_ERROR_DEG` | `2.25` | Hard command-feedback stop limit |
-| `NERO_TOPPRA_MIN_COMMIT_TICKS` | `8` | Minimum active-plan duration before normal replacement |
-| `NERO_TOPPRA_REPLAN_RESERVE_TICKS` | `8` | Remaining trajectory reserve required for fail-closed replan |
-| `NERO_TOPPRA_ALLOW_RESERVE_FOLLOWER_HANDOFF` | `0` | Must remain disabled for the current A/B |
+| `NERO_POLICY_DURATION` | `30` s | 单次试验时长 |
+| `NERO_FOLLOWER_MAX_VELOCITY_DEG_S` | `28` | 关节 follower 速度上限 |
+| `NERO_FOLLOWER_MAX_ACCELERATION_DEG_S2` | `280` | 关节 follower 加速度上限 |
+| `NERO_FOLLOWER_GOVERNOR_ERROR_DEG` | `1.50` | command-feedback 软超前误差阈值 |
+| `NERO_FOLLOWER_HARD_ERROR_DEG` | `2.25` | command-feedback 硬停止误差阈值 |
+| `NERO_TOPPRA_MIN_COMMIT_TICKS` | `8` | 正常替换前当前计划最少执行 tick 数 |
+| `NERO_TOPPRA_REPLAN_RESERVE_TICKS` | `8` | 触发安全重规划前必须保留的轨迹余量 |
+| `NERO_TOPPRA_ALLOW_RESERVE_FOLLOWER_HANDOFF` | `0` | 当前 A/B 中必须保持关闭 |
 
-The control clock always remains at 30 Hz. Retiming is allowed to redistribute
-phase *inside* a policy horizon, but may not change the horizon boundary.
+全局控制时钟固定为 30 Hz。重定时只能重新分配一个 horizon 内的相位，不能改变该 horizon 的起止 wall-clock 时间。
 
-## Source Responsibilities
+## 模块职责
 
-| Path | Responsibility |
+| 路径 | 职责 |
 |---|---|
-| `osqp_waypoint_smoother/waypoint_smoother/smoother.py` | Convex waypoint smoothing with bounded deviation from policy output |
-| `osqp_waypoint_smoother/ab_runtime/osqp_casadi_rtc_queue.py` | Active OSQP/CasADi queue, recovery candidate selection |
-| `casadi_fixed_horizon_retimer/fixed_phase_optimizer/optimizer.py` | Fixed-duration phase optimization under velocity, acceleration, and jerk constraints |
-| `toppra_fixed_horizon_retimer/ab_runtime/receding_toppra_queue.py` | Shared q/v/a continuous handoff, reserve, and safety decisions |
-| `toppra_fixed_horizon_retimer/ab_runtime/follower_state_bridge.py` | Follower command-state bridge for runtime handoff boundaries |
-| `/home/dev/nero_ws/scripts/bimanual_policy/bimanual_guarded_policy_stream.py` | Maintained NERO policy client, cameras, safety checks, CPV command output |
-| `/home/dev/nero_ws/nero_vla/trajectory_executor.py` | Streaming follower and feedback governor |
+| `trajectory/osqp_waypoint_smoother/waypoint_smoother/smoother.py` | 在策略输出邻域内做凸优化轨迹点平滑 |
+| `trajectory/osqp_waypoint_smoother/ab_runtime/osqp_casadi_rtc_queue.py` | 当前 OSQP/CasADi 队列与恢复候选轨迹选择 |
+| `trajectory/casadi_fixed_horizon_retimer/fixed_phase_optimizer/optimizer.py` | 在速度、加速度、jerk 约束下优化固定总时长相位 |
+| `trajectory/toppra_fixed_horizon_retimer/ab_runtime/receding_toppra_queue.py` | q/v/a 连续交接、余量与安全决策 |
+| `trajectory/toppra_fixed_horizon_retimer/ab_runtime/follower_state_bridge.py` | 队列和流式 follower 之间的命令状态桥接 |
+| `scripts/bimanual_policy/bimanual_guarded_policy_stream.py` | 策略客户端、相机、实机检查与 CPV 输出 |
+| `nero_vla/trajectory_executor.py` | 流式 follower 与 feedback governor |
 
-## Operating Rules
+## 操作规则
 
-- Do not edit the maintained `/home/dev/nero_ws` stream merely to test a
-  retimer. The A/B adapters replace queue and follower behavior in-process.
-- `reserve_exhaustion_follower_handoff` is disabled in the current launcher.
-  An unsafe candidate is discarded early and a fresh RTC request is made.
-- `rtc_queue_hold` is diagnostic evidence of inadequate reserve or inference
-  latency. It should be investigated, not hidden by raising hard limits.
-- Runtime diagnostics are written to
-  `/home/dev/ros2_project/osqp_waypoint_smoother/outputs/` and policy ticks to
-  `/home/dev/nero_ws/logs/bimanual_policy_stream/`.
+- 轨迹模块通过进程内替换队列和 follower 进行 A/B；不要为了测试重定时器而直接修改原生策略流。
+- 当前启动器关闭 `reserve_exhaustion_follower_handoff`。不安全候选会被尽早丢弃并请求新的 RTC chunk。
+- `rtc_queue_hold` 是轨迹余量不足或推理延迟过高的诊断信号，不能靠提高硬阈值掩盖。
+- 运行诊断写入 `trajectory/osqp_waypoint_smoother/outputs/`；策略 tick 日志写入 `artifacts/logs/bimanual_policy_stream/`。
 
-## Verification
+## 验证
 
 ```bash
-cd /home/dev/ros2_project
-./toppra_fixed_horizon_retimer/run_tests.sh
-./casadi_fixed_horizon_retimer/run_tests.sh
-./osqp_waypoint_smoother/run_tests.sh
+cd /home/dev/nero_bimanual_control
+./trajectory/toppra_fixed_horizon_retimer/run_tests.sh
+./trajectory/casadi_fixed_horizon_retimer/run_tests.sh
+./trajectory/osqp_waypoint_smoother/run_tests.sh
 ```
 
-Use a hardware preflight before an executed trial:
+实机执行前先做预检：
 
 ```bash
-./osqp_waypoint_smoother/ab_runtime/run_30k_osqp_casadi.sh --preflight-only
+./scripts/run_policy_osqp_casadi.sh --preflight-only
 ```

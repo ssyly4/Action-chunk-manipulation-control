@@ -1,23 +1,17 @@
-# CasADi Fixed-Horizon Phase Optimizer
+# CasADi 固定时域相位优化器
 
-This directory provides the phase optimizer used by the active OSQP + CasADi
-policy runtime. It never creates a new joint-space path. Given a fixed policy
-path, it redistributes local phase while preserving the 30 Hz horizon boundary.
+本目录提供当前 OSQP + CasADi 策略运行时使用的相位优化器。它不生成新的关节空间路径；对于固定策略路径，只重新分配局部相位，同时保持 30 Hz horizon 的边界不变。
 
-## Active API
+## 当前接口
 
-- `fixed_phase_optimizer/optimizer.py`: `CasadiPhaseOptimizer` and
-  `PhaseOptimizerConfig`.
-- `ab_runtime/casadi_rtc_queue.py`: queue adapter inherited by the active OSQP
-  runtime.
-- `tests/`: fixed-horizon, feasibility, and warm-start coverage.
+- `fixed_phase_optimizer/optimizer.py`：`CasadiPhaseOptimizer` 与 `PhaseOptimizerConfig`。
+- `ab_runtime/casadi_rtc_queue.py`：当前 OSQP 运行时继承的队列适配层。
+- `tests/`：固定时域、可行性与 warm-start 覆盖。
 
-Run its tests from this directory:
+在本目录运行测试：
 
 ```bash
 ./run_tests.sh
 ```
 
-The direct CasADi-only physical runner is historical material under
-`legacy_runtime/`. The full prior design notes are retained in
-`docs/archive/CasADi_fixed_horizon_retimer_design_notes.md`.
+直接 CasADi-only 实机运行器已归档到 `legacy_runtime/`。完整设计笔记保留在旧 ROS2 项目的归档文档中。

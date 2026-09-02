@@ -1,33 +1,30 @@
-# NERO Bimanual Control
+# NERO 双臂控制系统
 
-This repository owns the host-side bimanual execution path:
+本仓库负责从策略推理结果到两台 NERO 机械臂 CPV/CAN 命令的完整主机端控制链：
 
 ```text
-OpenPI server request
-  -> action-chunk scheduler / RTC
-  -> OSQP waypoint shaping
-  -> CasADi fixed-horizon phase retiming
-  -> CPV feedback governor
-  -> NERO CAN arms
+OpenPI 策略服务请求
+  -> action chunk 调度器 / RTC
+  -> OSQP 轨迹点平滑
+  -> CasADi 固定时域相位重定时
+  -> CPV 反馈调速器
+  -> NERO CAN 双臂
 ```
 
-It deliberately does not contain PICO teleoperation code, collected data, or
-model checkpoints.
+仓库不包含 PICO 遥操代码、数采数据或模型 checkpoint。
 
-## Neighbor repositories
+## 相邻目录
 
-| Responsibility | Location |
+| 职责 | 位置 |
 | --- | --- |
-| PICO teleop, Home, CAN preparation, recording | `/home/dev/nero_neo_teleop` |
-| Canonical raw and curated data | `/home/dev/nero_data` |
-| Training datasets, checkpoints, server logs | training server |
+| PICO 遥操、回零、CAN 准备与录制 | `/home/dev/nero_neo_teleop` |
+| 原始与筛选后的数采数据 | `/home/dev/nero_data` |
+| 训练集、checkpoint、训练与服务日志 | 训练服务器 |
 
-## Main entry points
+## 主要入口
 
-- Native guarded policy runtime: `scripts/run_policy_native.sh`
-- Current OSQP + CasADi A/B runtime: `scripts/run_policy_osqp_casadi.sh`
-- Dependency and path template: `config/paths.env.example`
+- 原生受保护策略控制：`scripts/run_policy_native.sh`
+- 当前 OSQP + CasADi A/B 控制：`scripts/run_policy_osqp_casadi.sh`
+- 依赖与本机路径模板：`config/paths.env.example`
 
-Before commanding hardware, source a local `config/paths.env` and run the
-launcher's preflight mode. The launchers only use external paths for teleop
-hardware preparation, the official SDK, and the remote policy server.
+执行实机前，先根据模板创建本机的 `config/paths.env`，然后运行启动脚本的预检模式。启动器只通过外部路径访问遥操硬件准备脚本、官方 SDK 与远程策略服务。

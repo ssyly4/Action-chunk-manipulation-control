@@ -1,56 +1,50 @@
-# OSQP Fixed-Horizon Waypoint Smoother
+# OSQP 固定时域轨迹点平滑器
 
-This is the current experimental physical runtime entry point. It does not
-modify the maintained Pi0.5, RTC, follower, or CPV source: its A/B adapter
-replaces the queue and follower only inside the launched process.
+这是当前实验性实机运行时入口。它不直接修改维护中的 Pi0.5、RTC、follower 或 CPV 源码；A/B 适配器只在被启动的进程内替换 action queue 和 follower。
 
-For the supported physical command and parameter ownership, read
-[`../docs/CURRENT_CONTROL_STACK.md`](../docs/CURRENT_CONTROL_STACK.md).
+完整的受支持实机命令和参数归属见 [`../../docs/CURRENT_CONTROL_STACK.md`](../../docs/CURRENT_CONTROL_STACK.md)。
 
-## Contract
+## 约束契约
 
-For one `H x 16` policy chunk, the smoother:
+对于一个 `H x 16` 的策略 action chunk，平滑器：
 
-- optimizes only the 14 arm joint columns;
-- preserves both gripper columns exactly;
-- preserves `H` and the fixed 30 Hz timeline;
-- keeps every arm waypoint inside a configurable trust region around the
-  policy output;
-- applies linear velocity, acceleration, jerk, and optional joint-position
-  constraints;
-- supports an exact start position and start velocity boundary;
-- does not impose zero terminal velocity;
-- returns the original input chunk on infeasibility or failed verification.
+- 只优化 14 个机械臂关节列；
+- 两个夹爪列保持原值；
+- 保持 `H` 与固定 30 Hz 时间轴；
+- 保持每个关节轨迹点位于策略输出附近的可配置 trust region 内；
+- 施加线速度、加速度、jerk 和可选关节位置约束；
+- 支持精确的起点位置和起点速度边界；
+- 不强制末端速度为零；
+- 不可行或验证失败时返回原始 action chunk。
 
-The convex objective is:
+凸优化目标为：
 
 ```text
-tracking + velocity tracking + acceleration regularization
-         + jerk regularization + terminal velocity tracking
+位置跟踪 + 速度跟踪 + 加速度正则
+         + jerk 正则 + 末端速度跟踪
 ```
 
-OSQP changes the joint waypoints. A later CasADi stage may then redistribute
-phase along this bounded, smoother path without changing the global horizon.
+OSQP 修改关节轨迹点。随后 CasADi 只沿这条有界且更平滑的路径重新分配相位，不改变全局 horizon。
 
-## Setup
+## 依赖安装
 
-Dependencies are isolated in this directory:
+依赖隔离在本目录的 `vendor/` 中：
 
 ```bash
-cd /home/dev/ros2_project/osqp_waypoint_smoother
+cd /home/dev/nero_bimanual_control/trajectory/osqp_waypoint_smoother
 /home/dev/enter/envs/lerobot/bin/python -m pip install \
   --target vendor -r requirements.txt
 ```
 
-## Test
+## 测试
 
 ```bash
-cd /home/dev/ros2_project/osqp_waypoint_smoother
+cd /home/dev/nero_bimanual_control/trajectory/osqp_waypoint_smoother
 chmod +x run_tests.sh scripts/smooth_chunk.py
 ./run_tests.sh
 ```
 
-## Offline chunk probe
+## 离线 action chunk 检查
 
 ```bash
 ./scripts/smooth_chunk.py /path/to/actions.npy \
@@ -61,68 +55,39 @@ chmod +x run_tests.sh scripts/smooth_chunk.py
   --max-jerk-deg-s3 8000
 ```
 
-The output report includes raw and smoothed velocity, acceleration, and jerk
-ratios plus maximum waypoint distortion. This stage should be connected to
-CasADi only after these offline metrics show a useful feasibility improvement
-without excessive waypoint displacement.
+输出报告会包含原始与平滑后速度、加速度、jerk 比率，以及最大轨迹点偏离。只有离线指标显示可行性改善且轨迹偏离可接受时，才应接入 CasADi。
 
-## Isolated runtime A/B
+## 隔离的实机 A/B
 
-The runtime path remains separate from the production follower:
+运行时链路保持与原生 follower 隔离：
 
 ```text
-raw RTC chunk -> OSQP waypoint smoothing -> CasADi retiming -> existing handoff
+原始 RTC chunk -> OSQP 轨迹点平滑 -> CasADi 重定时 -> 既有 q/v/a 交接
 ```
 
-Action Gain is bypassed in the normal path. Every non-initial request also
-predicts the earliest real takeover tick from the active plan's commit and
-reserve boundaries. A bounded Action Gain recovery candidate is generated from
-the rate-limited follower's predicted q/v at that wall-clock tick and from the
-corresponding future action index in the new chunk. The short follower rollout
-uses the production streaming position gain and the same velocity,
-acceleration, and jerk limits. At the actual commit boundary, the raw
-candidate remains preferred. The recovery candidate is selected when the raw
-candidate either exceeds the hard q/v handoff limits or cannot form a bounded
-q/v/a correction, provided the recovery candidate can. This avoids judging
-recovery against the earlier request-time state and then discovering a new
-mismatch after the robot has moved for another commit window.
+正常链路绕过 Action Gain。每次非初始请求都会根据当前计划的 commit 与 reserve 边界预测最早真实接管 tick，并从该时刻 follower 预测的 q/v 与新 chunk 的对应 future action 构造有限的恢复候选。
 
-If bounded OSQP smoothing rejects the raw chunk itself, the adapter uses the
-recovery candidate as the primary result. A second rejection fails closed
-instead of forwarding an unsafe trajectory. Runtime logs distinguish
-`gain=bypassed`, `gain=fallback:<value>`, and
-`handoff_candidate=recovery`. Recovery selection logs also include the
-predicted takeover source and wall-clock tick.
+真实 commit 边界仍优先使用原始候选。只有原始候选超过 q/v 硬交接限制或无法构造有界 q/v/a correction，而恢复候选可以时，才选择恢复候选。运行日志中的 `gain=bypassed`、`gain=fallback:<value>` 与 `handoff_candidate=recovery` 用于区分路径。
 
-The OSQP A/B launcher uses an 8-tick minimum commit and preserves an 8-tick
-replan reserve. If neither the raw nor recovery candidate supports a bounded
-handoff, that candidate is discarded at the replan boundary and a fresh RTC
-request is allowed. This path deliberately disables the legacy
-`reserve_exhaustion_follower_handoff`: it fails closed and replans instead of
-forcing an unbounded follower takeover after the old trajectory is exhausted.
+当前 A/B 启动器使用 8 tick 最小提交与 8 tick 重规划余量。如果原始候选和恢复候选都无法安全交接，会在重规划边界丢弃候选并发送新的 RTC 请求；此路径明确禁用旧的 `reserve_exhaustion_follower_handoff`，不会在旧轨迹耗尽后强制进行无界 follower 接管。
 
-The runtime adapter replaces the RTC queue only inside its own process. The
-production stream source remains unchanged:
+适配器只在自身进程中替换 RTC queue，原生策略流源码保持不变：
 
 ```bash
-cd /home/dev/ros2_project
+cd /home/dev/nero_bimanual_control
 NERO_POLICY_DURATION=30 \
-  ./osqp_waypoint_smoother/ab_runtime/run_30k_osqp_casadi.sh --preflight-only
+  ./scripts/run_policy_osqp_casadi.sh --preflight-only
 ```
 
-After preflight, omit `--preflight-only` to run the guarded physical A/B. The
-default runtime leaves
-cross-chunk continuity to the existing q/v handoff. Set
-`NERO_OSQP_ENFORCE_BOUNDARY=1` only for a separate strict boundary experiment.
+预检通过后去掉 `--preflight-only` 才会启动实机。默认运行时把跨 chunk 连续性交给既有 q/v 交接；`NERO_OSQP_ENFORCE_BOUNDARY=1` 仅用于单独的严格边界实验。
 
-## Recorded policy A/B
+## 已录制策略的 A/B 回放
 
-Compare the existing raw-to-CasADi path with OSQP-to-CasADi without robot
-commands:
+在不连接实机的情况下，对比原始到 CasADi 路径与 OSQP 到 CasADi 路径：
 
 ```bash
 ./scripts/replay_chunks_to_casadi.py \
-  /home/dev/nero_ws/logs/bimanual_policy_stream/RUN/chunks.jsonl \
+  /path/to/chunks.jsonl \
   --trust-deg 0.3 \
   --output outputs/replay_report.json
 ```

@@ -1,6 +1,3 @@
-# Superseded Direct CasADi Runtime
+# 已替代的直接 CasADi 运行时
 
-These runners record the direct CasADi-only A/B path. The active system uses
-the optimizer through `osqp_waypoint_smoother/` instead. Paths and presets in
-this directory are historical and are intentionally not maintained as current
-physical entry points.
+这些启动器记录了早期直接使用 CasADi 的 A/B 路径。当前系统通过 `osqp_waypoint_smoother/` 使用该优化器。本目录中的路径和预设仅供历史对比，不再维护为实机入口。
