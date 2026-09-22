@@ -90,7 +90,7 @@ NERO_CASADI_MAX_SOLVE_SEC=0.02
 ```bash
 cd /home/dev/nero_bimanual_control
 NERO_POLICY_DURATION=30 \
-  ./scripts/run_policy_osqp_casadi.sh --preflight-only
+  ./scripts/run_policy.sh --task towel_fold --preflight-only
 ```
 
 预检通过后去掉 `--preflight-only` 才会启动实机。默认运行时把跨 chunk 连续性交给既有 q/v 交接；`NERO_OSQP_ENFORCE_BOUNDARY=1` 仅用于单独的严格边界实验。

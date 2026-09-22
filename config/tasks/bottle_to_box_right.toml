@@ -1,0 +1,49 @@
+[task]
+name = "bottle_to_box_right"
+mode = "right"
+runtime = "trajectory/osqp_waypoint_smoother/runtime/right_policy_runtime.py"
+warmup = "right"
+
+[environment]
+NERO_POLICY_CONFIG = "pi05_nero_bottle_box_right60_command_eff4_v1"
+NERO_POLICY_CHECKPOINT = "119999"
+NERO_POLICY_SOURCE = "/home/dev/workspace/nero_training/checkpoints/pi05_nero_bottle_box_right60_command_eff4_v1/lora_opt30000_bottle_box_right60_command_h16_eff4_v1/119999"
+NERO_POLICY_STAGE_NAME = "nero_bottle_box_right60_h16_30000_osqp_casadi"
+NERO_POLICY_PROMPT = "pick up the bottle and place it into the box"
+
+[defaults]
+NERO_POLICY_DURATION = "20"
+NERO_POLICY_WARMUP = "1"
+PICO_RIGHT_CAN_USB_BUS = "1-2.3:1.0"
+NERO_OSQP_FAST_PATH = "1"
+NERO_OSQP_SPECULATIVE_RECOVERY = "0"
+NERO_CASADI_PREWARM = "1"
+NERO_CASADI_PREWARM_HORIZON = "16"
+NERO_CASADI_PREWARM_PHASES = "5,6,7"
+NERO_CASADI_MAX_JERK_DEG_S3 = "8000"
+NERO_CASADI_STREAMING_POSITION_GAIN_S = "4.0"
+NERO_CASADI_MAX_SOLVE_SEC = "0.02"
+NERO_OSQP_TRUST_REGION_DEG = "0.3"
+NERO_OSQP_MAX_SOLVE_SEC = "0.02"
+NERO_FOLLOWER_MAX_VELOCITY_DEG_S = "28"
+NERO_FOLLOWER_MAX_ACCELERATION_DEG_S2 = "280"
+NERO_FOLLOWER_GOVERNOR_ERROR_DEG = "1.5"
+NERO_FOLLOWER_HARD_ERROR_DEG = "2.25"
+NERO_RTC_INFERENCE_DELAY_STEPS = "7"
+NERO_RTC_MAX_GUIDANCE_WEIGHT = "2.0"
+
+[arguments]
+values = [
+  "--action-horizon", 16,
+  "--chunk-mode", "rtc_time",
+  "--rtc-execution-horizon", 8,
+  "--rtc-queue-threshold", 14,
+  "--rtc-action-hz", 30,
+  "--rtc-handoff-decay-steps", 0,
+  "--rtc-max-handoff-error-deg", 2.5,
+  "--rtc-num-steps", 3,
+  "--progress-gripper-lead-steps", 4,
+  "--gripper-event-lookahead-steps", 15,
+  "--gripper-catchup-hold-sec", 0,
+  "--exit-on-right-gripper-cycle",
+]

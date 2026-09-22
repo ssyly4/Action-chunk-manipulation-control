@@ -13,7 +13,8 @@
   -> CPV 后端 -> CAN -> NERO 双臂
 ```
 
-当前实机入口为 `scripts/run_policy_osqp_casadi.sh`。以下环境变量是受支持的调参接口：
+当前实机入口为 `scripts/run_policy.sh --task towel_fold`。任务固定参数位于
+`config/tasks/towel_fold.toml`，以下环境变量可在启动时覆盖其默认值：
 
 | 变量 | 默认值 | 含义 |
 |---|---:|---|
@@ -61,5 +62,5 @@ cd /home/dev/nero_bimanual_control
 实机执行前先做预检：
 
 ```bash
-./scripts/run_policy_osqp_casadi.sh --preflight-only
+./scripts/run_policy.sh --task towel_fold --preflight-only
 ```

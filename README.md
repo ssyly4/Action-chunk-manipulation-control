@@ -40,14 +40,17 @@ cd /home/dev/nero_bimanual_control
 cp config/paths.env.example config/paths.env
 ```
 
-当前默认实机链路是 OSQP + CasADi + RTC：
+所有策略任务共用一个入口，任务差异由 `config/tasks/*.toml` 描述：
 
 ```bash
 # 只验证 CAN、相机、策略服务和运行时，不发送机械臂命令
-./scripts/run_policy_osqp_casadi.sh --preflight-only
+./scripts/run_policy.sh --task towel_fold --preflight-only
 
 # 通过预检后才允许实机执行
-./scripts/run_policy_osqp_casadi.sh --execute
+./scripts/run_policy.sh --task towel_fold --execute
+
+# 单右臂抓瓶入框
+./scripts/run_policy.sh --task bottle_to_box_right --preflight-only
 ```
 
 `--execute` 才会使能并发送 CPV 命令。任何预检失败都不应绕过。
@@ -95,14 +98,14 @@ microbatch 1、梯度累计 4、120,000 microsteps = 30,000 次优化更新。
 ### OSQP + CasADi 正式主路径
 
 ```text
-scripts/run_policy_osqp_casadi.sh
-  └─ trajectory/osqp_waypoint_smoother/runtime/launch_policy.sh
-       └─ trajectory/osqp_waypoint_smoother/runtime/run_policy.sh
-            ├─ nero_neo_teleop/scripts/can/ensure_can_interface.sh
-            ├─ scripts/bimanual_policy/ensure_bimanual_policy_server.sh
-            └─ policy_runtime.py
-                 └─ 进程内加载 bimanual_guarded_policy_stream.py
-                    并替换 RTC queue 与 follower
+scripts/run_policy.sh
+  ├─ config/tasks/<task>.toml
+  ├─ nero_vla/task_config.py
+  ├─ nero_neo_teleop/scripts/can/ensure_can_interface.sh
+  ├─ scripts/bimanual_policy/ensure_bimanual_policy_server.sh
+  └─ policy_runtime.py / right_policy_runtime.py
+       └─ 进程内加载 bimanual_guarded_policy_stream.py
+          并替换 RTC queue 与 follower
 ```
 
 这样做的目的，是复用已经验证的策略输入、相机与 CPV 运行器，同时在正式进程内接入 OSQP、CasADi、TOPPRA 轨迹处理逻辑。
@@ -126,7 +129,8 @@ scripts/run_policy_osqp_casadi.sh
 
 | 文件 | 用途 |
 |---|---|
-| `scripts/run_policy_osqp_casadi.sh` | 当前默认入口；读取本机路径配置后启动 OSQP + CasADi 实机控制。 |
+| `scripts/run_policy.sh` | 唯一正式策略入口；选择任务、准备硬件与服务并启动控制。 |
+| `config/tasks/*.toml` | 模型、任务文本、horizon 和控制参数 preset。 |
 | `config/paths.env.example` | 本机目录、SDK、策略服务地址模板。复制后形成不入 Git 的 `config/paths.env`。 |
 | `docs/CURRENT_CONTROL_STACK.md` | 当前控制参数、运行规则与验证命令。 |
 
@@ -136,7 +140,7 @@ scripts/run_policy_osqp_casadi.sh
 |---|---|
 | `bimanual_guarded_policy_stream.py` | 实机主程序：相机、CAN、策略请求、夹爪、双 follower、CPV 输出、日志和安全检查。 |
 | `ensure_bimanual_policy_server.sh` | 检查远程 OpenPI 服务；按需要同步并启动指定 checkpoint 的策略服务。 |
-| `run_bimanual_policy_trial.sh` | 被正式 OSQP + CasADi 启动器调用的基础编排器：CAN 预检、策略预热、可选回零、执行与失败后的 hold。 |
+| `run_bimanual_policy_trial.sh` | 原生策略故障隔离入口使用的基础编排器，不属于正式 OSQP 路径。 |
 | `bimanual_policy_dry_run.py` | 读取真实 CAN/相机并请求策略，但完全不连接机器人命令 API。 |
 | `run_bimanual_policy_dry_run.sh` | dry-run 的 shell 包装器。 |
 
@@ -175,15 +179,14 @@ scripts/run_policy_osqp_casadi.sh
 | `osqp_waypoint_smoother/waypoint_smoother/smoother.py` | OSQP 凸优化：在 trust region 内平滑策略关节轨迹点，约束速度、加速度、jerk。 |
 | `osqp_waypoint_smoother/runtime/osqp_casadi_rtc_queue.py` | 当前主运行时 queue：串接 OSQP、CasADi、TOPPRA 交接，并处理恢复候选。 |
 | `osqp_waypoint_smoother/runtime/policy_runtime.py` | 运行时注入适配器：动态加载原生策略流，并替换 queue/follower 类。 |
-| `osqp_waypoint_smoother/runtime/run_policy.sh` | 实机编排器：CAN 准备、策略服务、可选回零和 Python 环境。 |
-| `osqp_waypoint_smoother/runtime/launch_policy.sh` | 当前模型与 OSQP/CasADi 参数 preset；通过环境变量暴露调参面。 |
+| `osqp_waypoint_smoother/runtime/right_policy_runtime.py` | 将单右臂 8D 策略接入同一轨迹和 follower 运行时。 |
 | `casadi_fixed_horizon_retimer/fixed_phase_optimizer/optimizer.py` | 固定总时长的相位优化器，支持速度、加速度、jerk 约束和 warm-start。 |
 | `casadi_fixed_horizon_retimer/runtime/casadi_rtc_queue.py` | 将 CasADi 相位优化接入滚动 RTC queue 的适配层。 |
 | `toppra_fixed_horizon_retimer/fixed_path_retimer/` | 路径表示、TOPPRA 重定时与滚动计划数据结构。 |
 | `toppra_fixed_horizon_retimer/runtime/receding_toppra_queue.py` | q/v/a 连续 handoff、reserve、commit、候选拒绝与重新请求策略。 |
 | `toppra_fixed_horizon_retimer/runtime/follower_state_bridge.py` | 在 queue 与 follower 之间共享最后发送命令、速度、加速度和期望速度。 |
 
-每个轨迹目录的 `tests/` 是该层的单元测试；`scripts/` 为离线回放、绘图和 action chunk 诊断；`legacy_runtime/` 为历史实机启动器，禁止直接用于当前机器人。
+每个轨迹目录的 `tests/` 是该层的单元测试；`scripts/` 为离线回放、绘图和 action chunk 诊断。旧实机启动器已从 `main` 移除，可从提交 `08d40f1` 的历史中恢复。
 
 ### 诊断与服务器部署
 
@@ -195,7 +198,7 @@ scripts/run_policy_osqp_casadi.sh
 | `scripts/diagnostics/bimanual/analyze_action_execution_match.py` | 对比策略 action、最终 command 与实测执行状态。 |
 | `scripts/diagnostics/run_policy_native.sh` | 不注入轨迹优化器的故障隔离入口；仅用于定位策略、轨迹层或硬件层问题，不是日常实机运行方式。 |
 | `server_staging/` | 训练服务器部署的转换、验证、归一化和 NERO OpenPI 配置镜像，不存放模型。 |
-| `archive/legacy_policy_presets/` | 旧 checkpoint 专用启动器，仅用于复现实验。 |
+| `docs/ARCHIVE_INDEX.md` | 历史启动器的 Git 提交位置和恢复方法。 |
 
 ## 5. 当前可调参数
 
@@ -220,7 +223,7 @@ cd /home/dev/nero_bimanual_control
 NERO_POLICY_DURATION=45 \
 NERO_FOLLOWER_MAX_VELOCITY_DEG_S=25 \
 NERO_FOLLOWER_MAX_ACCELERATION_DEG_S2=250 \
-./scripts/run_policy_osqp_casadi.sh --execute
+./scripts/run_policy.sh --task towel_fold --execute
 ```
 
 ## 6. 验证顺序
@@ -237,7 +240,7 @@ cd /home/dev/nero_bimanual_control
 再进行实机预检：
 
 ```bash
-./scripts/run_policy_osqp_casadi.sh --preflight-only
+./scripts/run_policy.sh --task towel_fold --preflight-only
 ```
 
 只有确认双 CAN、三路相机、策略服务和 Home 状态全部正确后，才使用 `--execute`。

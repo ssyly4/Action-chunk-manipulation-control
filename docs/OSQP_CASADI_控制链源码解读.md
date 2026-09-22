@@ -8,9 +8,9 @@ OSQP 和 CasADi 都处理**已有的关节轨迹**，不生成任务目标，也
 ## 源码从哪里进入
 
 ```text
-scripts/run_policy_osqp_casadi.sh
-  → trajectory/osqp_waypoint_smoother/runtime/launch_policy.sh
-  → trajectory/osqp_waypoint_smoother/runtime/run_policy.sh
+scripts/run_policy.sh --task towel_fold
+  → config/tasks/towel_fold.toml
+  → nero_vla/task_config.py
   → trajectory/osqp_waypoint_smoother/runtime/policy_runtime.py
       在进程内将 BimanualRtcActionQueue 替换为 RecedingOsqpCasadiRtcQueue
   → 策略流收到 24 × 16 chunk
@@ -93,7 +93,7 @@ q₀ = boundary_position   可选：首段速度 = boundary_velocity
 
 ## 当前正式运行时如何选择两条路径
 
-[`launch_policy.sh`](../trajectory/osqp_waypoint_smoother/runtime/launch_policy.sh)
+[`towel_fold.toml`](../config/tasks/towel_fold.toml)
 默认设置 `NERO_OSQP_FAST_PATH=1`、`NERO_OSQP_SPECULATIVE_RECOVERY=0`。
 队列在 `_retime_job()` 中先做 OSQP；成功后调用 `_fixed_timeline_result()`，直接用
 `osqp_fixed_timeline` 状态提交固定 30 Hz 命令，并记录 `casadi_skipped=True`。

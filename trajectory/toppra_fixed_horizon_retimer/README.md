@@ -15,4 +15,4 @@
 ./run_tests.sh
 ```
 
-独立 TOPPRA 实机运行器已经归档到 `legacy_runtime/`。完整设计笔记保留在旧 ROS2 项目的归档文档中。
+独立 TOPPRA 实机运行器已从主分支移除，可从提交 `08d40f1` 恢复。正式运行统一使用仓库根目录的 `scripts/run_policy.sh`。
