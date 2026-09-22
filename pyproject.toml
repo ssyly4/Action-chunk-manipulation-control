@@ -14,12 +14,6 @@ dependencies = [
     "websockets>=12",
 ]
 
-[project.scripts]
-nero-state-monitor = "nero_vla.state_monitor:main"
-nero-policy-probe = "nero_vla.policy_probe:main"
-nero-synthetic-observation = "nero_vla.observation_pipeline:main"
-nero-can-bridge = "nero_vla.leader_follower_bridge:main"
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["nero_vla*"]

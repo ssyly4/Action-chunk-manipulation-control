@@ -37,10 +37,10 @@ from nero_vla.camera_reader import V4L2CameraReader
 from nero_vla.cpv_backend import NeroCpvPositionBackend
 from nero_vla.dual_can import require_bridge_not_forwarding, require_can_role
 from nero_vla.gripper_controller import RateLimitedGripperFollower
-from nero_vla.guarded_policy_stream import check_driver_health
-from nero_vla.guarded_policy_stream import check_gripper_health
-from nero_vla.guarded_policy_stream import wait_complete_joint_feedback
-from nero_vla.guarded_policy_stream import wait_cpv_mode, wait_enabled
+from nero_vla.health_checks import check_driver_health
+from nero_vla.health_checks import check_gripper_health
+from nero_vla.health_checks import wait_complete_joint_feedback
+from nero_vla.health_checks import wait_cpv_mode, wait_enabled
 from nero_vla.image_tools import resize_with_pad
 from nero_vla.lift_assist import PreGraspDescentAssist
 from nero_vla.lift_assist import PostReleaseHeightGuard

@@ -106,7 +106,6 @@ scripts/run_policy.sh
 |---|---|
 | `bimanual_guarded_policy_stream.py` | 实机主程序：相机、CAN、策略请求、夹爪、双 follower、CPV 输出、日志和安全检查。 |
 | `ensure_bimanual_policy_server.sh` | 检查远程 OpenPI 服务；按需要同步并启动指定 checkpoint 的策略服务。 |
-| `run_bimanual_policy_trial.sh` | 原生策略故障隔离入口使用的基础编排器，不属于正式 OSQP 路径。 |
 | `bimanual_policy_dry_run.py` | 读取真实 CAN/相机并请求策略，但完全不连接机器人命令 API。 |
 | `run_bimanual_policy_dry_run.sh` | dry-run 的 shell 包装器。 |
 
@@ -122,20 +121,10 @@ scripts/run_policy.sh
 | `policy_client.py` | OpenPI WebSocket/msgpack 客户端与端口可达性检查。 |
 | `gripper_controller.py` | 夹爪归一化位置、限速与反馈闭环控制。 |
 | `robot_config.py` | NERO 关节限制、CPV 模式限制和 Home 配置常量。 |
-| `guarded_policy_stream.py` | 较早的通用受保护策略流；仍提供健康检查与等待 CPV/使能状态等共享函数。 |
+| `health_checks.py` | 运动前完整关节反馈、使能/CPV 状态和运行期驱动器/夹爪故障检查。 |
 | `lift_assist.py` | 可选的抓取后抬升、预抓取下探和高度保护辅助逻辑；默认主路径不应随意启用。 |
 | `image_tools.py` | 相机图像缩放、填充、旋转等 observation 预处理。 |
-| `eth_state.py` | NERO ETH 状态读取工具。 |
-| `state_monitor.py` | 单臂状态监控、固件识别和 SDK 机器人对象创建。 |
-| `gripper_calibration.py` | 夹爪宽度校准工具。 |
-| `observation_pipeline.py` | 合成 observation 与状态管线检查。 |
-| `policy_probe.py` | 非实机策略连接和 action 输出探针。 |
-| `policy_shadow.py` | 只观测、不执行的策略 shadow 工具。 |
-| `real_policy_dry_run.py` | 真实相机/状态输入上的单臂无执行策略检查。 |
-| `terminal_target_filter.py` | 对策略终端关节目标进行保护过滤。 |
-| `trajectory_dry_run.py` | 不接硬件的 follower/trajectory 回放工具。 |
-| `guarded_policy_run.py`、`guarded_policy_step.py` | 较早的单步/单臂受保护执行工具，保留用于回归与参考，不是双臂主入口。 |
-| `leader_follower_bridge.py` | CAN leader-follower bridge 服务端实现；双臂策略运行前会检查它没有错误转发。 |
+| `task_config.py` | 读取 `config/tasks/*.toml`，校验任务配置并输出 Shell 环境变量。 |
 
 ### 轨迹处理：`trajectory/`
 
@@ -161,8 +150,6 @@ scripts/run_policy.sh
 | `scripts/diagnostics/bimanual/bimanual_policy_rtc_stream_dry_run.py` | 模拟策略流与 RTC 消费的 dry-run。 |
 | `scripts/diagnostics/bimanual/bimanual_policy_offline_regression.py` | 已保存 chunk 的离线回归检查。 |
 | `scripts/diagnostics/bimanual/analyze_action_execution_match.py` | 对比策略 action、最终 command 与实测执行状态。 |
-| `scripts/diagnostics/run_policy_native.sh` | 不注入轨迹优化器的故障隔离入口；仅用于定位策略、轨迹层或硬件层问题，不是日常实机运行方式。 |
-| `docs/ARCHIVE_INDEX.md` | 历史启动器的 Git 提交位置和恢复方法。 |
 
 ## 5. 当前可调参数
 
@@ -209,4 +196,4 @@ cd /home/dev/nero_bimanual_control
 
 只有确认双 CAN、三路相机、策略服务和 Home 状态全部正确后，才使用 `--execute`。
 
-更多运行细节见：[当前控制栈](docs/CURRENT_CONTROL_STACK.md)、[仓库目录结构](docs/REPOSITORY_LAYOUT.md)、[归档索引](docs/ARCHIVE_INDEX.md)。
+更多运行细节见：[当前控制栈](docs/CURRENT_CONTROL_STACK.md)和[仓库目录结构](docs/REPOSITORY_LAYOUT.md)。历史代码可直接从 Git 提交 `82e4461` 恢复，不在当前工作树中保留副本。
