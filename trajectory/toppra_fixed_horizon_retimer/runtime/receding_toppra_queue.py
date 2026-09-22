@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import sys
 import time
@@ -238,6 +238,7 @@ class RuntimeDecision:
     committed_ticks: int | None = None
     minimum_commit_ticks: int = 0
     layer_mismatch: dict[str, dict[str, float]] | None = None
+    retime_breakdown: dict[str, object] | None = None
 
 
 @dataclass
@@ -256,6 +257,7 @@ class ReadyPlan:
     evaluation_attempts: int = 0
     rejection_logged: bool = False
     commit_wait_logged: bool = False
+    retime_breakdown: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -1005,6 +1007,7 @@ class RecedingToppraRtcQueue:
             committed_ticks=committed_ticks,
             minimum_commit_ticks=self.minimum_commit_ticks,
             layer_mismatch=layer_mismatch,
+            retime_breakdown=ready.retime_breakdown,
         )
         if accepted:
             self._ready = None
@@ -1122,6 +1125,7 @@ class RecedingToppraRtcQueue:
                 ),
                 boundary_path_mode=ready.boundary_path_mode,
                 action="candidate_expired_without_safe_handoff",
+                retime_breakdown=ready.retime_breakdown,
             )
         )
 

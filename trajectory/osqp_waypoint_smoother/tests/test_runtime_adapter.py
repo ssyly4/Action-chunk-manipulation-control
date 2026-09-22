@@ -18,6 +18,58 @@ ARM_COLUMNS = tuple(range(7)) + tuple(range(8, 15))
 
 
 class OsqpCasadiRuntimeAdapterTest(unittest.TestCase):
+    def test_osqp_fast_path_skips_casadi_on_feasible_fixed_timeline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            keys = (
+                "NERO_TOPPRA_RUNTIME_LOG",
+                "NERO_OSQP_FAST_PATH",
+                "NERO_OSQP_SPECULATIVE_RECOVERY",
+            )
+            previous = {key: os.environ.get(key) for key in keys}
+            os.environ["NERO_TOPPRA_RUNTIME_LOG"] = str(
+                Path(directory) / "runtime.jsonl"
+            )
+            os.environ["NERO_OSQP_FAST_PATH"] = "1"
+            os.environ["NERO_OSQP_SPECULATIVE_RECOVERY"] = "0"
+            queue = RecedingOsqpCasadiRtcQueue(action_hz=30.0)
+            try:
+                actions = np.zeros((24, 16), dtype=np.float64)
+                ramp = np.deg2rad(np.arange(24) * (6.0 / 30.0))
+                for column in ARM_COLUMNS:
+                    actions[:, column] = ramp
+                ready = queue._retime_job(
+                    values=actions,
+                    generation=1,
+                    raw_start_tick=0,
+                    loaded_at_tick=6,
+                    skip_steps=6,
+                    started=time.perf_counter(),
+                    anchor=actions[6, ARM_COLUMNS],
+                    initial_velocity=np.full(14, np.deg2rad(6.0)),
+                    previous_gain=1.0,
+                    boundary_state_source="test",
+                    boundary_path_mode="path_curvature",
+                )
+
+                self.assertEqual(ready.plan.retiming.status, "osqp_fixed_timeline")
+                self.assertTrue(ready.plan.retiming.feasible)
+                self.assertTrue(ready.plan.retiming.metrics["casadi_skipped"])
+                self.assertIsNone(ready.recovery_plan)
+                self.assertEqual(ready.retime_breakdown["casadi_primary_ms"], 0.0)
+                self.assertTrue(ready.retime_breakdown["fast_path_used"])
+                self.assertEqual(len(ready.plan.retiming.commands), 18)
+                np.testing.assert_allclose(
+                    ready.plan.retiming.phase_samples,
+                    np.arange(6.0, 24.0),
+                )
+            finally:
+                queue.close()
+                for key, value in previous.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+
     def test_builds_osqp_then_casadi_plan_without_robot_io(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             old_log = os.environ.get("NERO_TOPPRA_RUNTIME_LOG")

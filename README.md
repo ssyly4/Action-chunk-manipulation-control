@@ -52,6 +52,44 @@ cp config/paths.env.example config/paths.env
 
 `--execute` 才会使能并发送 CPV 命令。任何预检失败都不应绕过。
 
+单右臂 PICO 抓瓶入框的 60 条示教入口是 `scripts/record_right_pico_60.sh`。
+不带参数仅打印计划；`--execute` 才调用现有单右臂管理式录制器。
+默认复用同级 `jepa_world_model_real_robot` 仓库中的录制器；若目录不同，
+用 `NERO_RIGHT_RECORDER_ROOT` 指向该仓库。
+本批次起点固定在录制器仓库的 `configs/nero_bottle_into_box_right_start.local.json`：
+来自右臂 follower 的现场七轴反馈（deg），不是启动录制时重新取样。
+缺少该本地文件时 `--execute` 会退出；可用 `NERO_RIGHT_START_POSE_FILE` 显式指定其他起点。
+录制器在已有 dataset 恢复时会优先沿用其 `recording_config.json` 中的起点。
+数据保存到 `NERO_RIGHT_DATA_DIR`（默认 `~/nero_data/raw/bottle_to_box`），
+每条示教由操作者决定保存或丢弃，直到保存 60 条。原始 `action` 是带
+`monotonic_ns` 的控制器命令，关节单位 rad、夹爪为 opening `0..1`；
+不是下一帧关节反馈。相机/CAN 参数沿用 `nero_neo_teleop/.env`。
+
+抓瓶入框示教的 π0.5 SFT 副本在 LeRobot 环境中用离线脚本生成，**不覆盖原始采集**：
+
+```bash
+NERO_DATA_ROOT="${NERO_DATA_ROOT:-$HOME/nero_data}"
+python scripts/prepare_right_pico_sft.py \
+  --source "$NERO_DATA_ROOT/raw/bottle_to_box/nero_bottle_into_box_right_60_command_v1" \
+  --output "$NERO_DATA_ROOT/processed/bottle_to_box/nero_bottle_into_box_right_60_pi05_sft_v1"
+```
+
+输出为 LeRobot v3，`action` 仍是 7 轴绝对控制器目标（rad）加夹爪开度，
+仅修正 `meta/info.json` 中误写为 `next_feedback.*` 的维度名称；图像、Parquet
+数值和逐帧诊断保持原样。`meta/nero_pi05_sft_manifest.json` 记录来源与验证结果。
+瓶子最终是否立着不是模仿学习标签，不推断成功/失败；原始
+`recording_config.json` 的 `training_ready: false` 指 JEPA-WMs 转换，不是
+π0.5 SFT 状态。已有输出目录时脚本拒绝覆盖。
+
+`.154` 的 OpenPI 固定读取 LeRobot v2.1；`scripts/convert_right_pico_to_openpi_v21.py`
+将这份 v3 SFT 副本离线转为 v2.1，映射 `world → external`、
+`right_wrist → wrist`，保留 8 维控制器命令语义。训练使用
+`scripts/train_right_bottle_pi05_openpi.py` 与
+`scripts/run_right_bottle_pi05_154.sh`：单臂抓瓶 LoRA 基线、16 步 horizon、
+microbatch 1、梯度累计 4、120,000 microsteps = 30,000 次优化更新。
+脚本在独立 checkpoint 目录运行，不使用 `--overwrite`；状态和日志位于
+`.154` 的 `nero_training/logs/nero_bottle_box_right60_command_eff4_30k.*`。
+
 ## 3. 当前实机调用路径
 
 ### OSQP + CasADi 正式主路径

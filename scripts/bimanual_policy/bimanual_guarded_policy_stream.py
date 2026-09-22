@@ -198,6 +198,12 @@ def main() -> None:
     parser.add_argument("--rtc-execution-horizon", type=int, default=12)
     parser.add_argument("--rtc-queue-threshold", type=int, default=22)
     parser.add_argument("--rtc-action-hz", type=float, default=25.0)
+    parser.add_argument(
+        "--rtc-inference-delay-steps",
+        type=int,
+        default=None,
+        help="Fixed RTC delay budget; defaults to the measured latency estimate.",
+    )
     parser.add_argument("--rtc-handoff-decay-steps", type=int, default=0)
     parser.add_argument("--rtc-max-handoff-error-deg", type=float, default=2.5)
     parser.add_argument(
@@ -352,6 +358,13 @@ def main() -> None:
             parser.error(f"rtc-queue-threshold must be in [1, {args.action_horizon - 1}]")
         if not 20.0 <= args.rtc_action_hz <= ACTION_HZ:
             parser.error(f"rtc-action-hz must be in [20, {ACTION_HZ:.0f}]")
+        if args.rtc_inference_delay_steps is not None and not (
+            1 <= args.rtc_inference_delay_steps < args.action_horizon
+        ):
+            parser.error(
+                "rtc-inference-delay-steps must be in "
+                f"[1, {args.action_horizon - 1}]"
+            )
         if not 0 <= args.rtc_handoff_decay_steps <= args.action_horizon:
             parser.error(
                 f"rtc-handoff-decay-steps must be in [0, {args.action_horizon}]"
@@ -447,10 +460,17 @@ def main() -> None:
             else None
         ),
         "rtc_delay_prediction_clock": (
-            "measured_feedback_progress"
+            "fixed_override"
+            if args.rtc_inference_delay_steps is not None
+            else "measured_feedback_progress"
             if args.chunk_mode == "rtc"
             else "emitted_action_count"
             if args.chunk_mode == "rtc_time"
+            else None
+        ),
+        "rtc_inference_delay_steps": (
+            args.rtc_inference_delay_steps
+            if args.chunk_mode in {"rtc", "rtc_time"}
             else None
         ),
         "rtc_num_steps": (
@@ -1230,14 +1250,18 @@ def main() -> None:
                         if args.chunk_mode == "rtc_time"
                         else max(1.0, min(ACTION_HZ, progress.progress_rate_hz))
                     )
-                    predicted_delay_steps = min(
-                        args.action_horizon - 1,
-                        max(
-                            1,
-                            math.ceil(
-                                max(rtc_latency_history) * estimated_progress_hz
+                    predicted_delay_steps = (
+                        args.rtc_inference_delay_steps
+                        if args.rtc_inference_delay_steps is not None
+                        else min(
+                            args.action_horizon - 1,
+                            max(
+                                1,
+                                math.ceil(
+                                    max(rtc_latency_history) * estimated_progress_hz
+                                ),
                             ),
-                        ),
+                        )
                     )
                     rtc_request = progress.make_request(
                         now=now,

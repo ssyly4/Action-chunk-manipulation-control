@@ -24,7 +24,8 @@
          + jerk 正则 + 末端速度跟踪
 ```
 
-OSQP 修改关节轨迹点。随后 CasADi 只沿这条有界且更平滑的路径重新分配相位，不改变全局 horizon。
+OSQP 修改关节轨迹点。当前正式入口在 OSQP 结果已经满足固定 30 Hz
+速度、加速度和 jerk 约束时直接执行，不再无条件运行 CasADi。CasADi 保留为可切换的慢路径，只沿有界路径重新分配相位，不改变全局 horizon。
 
 ## 依赖安装
 
@@ -62,12 +63,25 @@ chmod +x run_tests.sh scripts/smooth_chunk.py
 运行时链路保持与原生 follower 隔离：
 
 ```text
-原始 RTC chunk -> OSQP 轨迹点平滑 -> CasADi 重定时 -> 既有 q/v/a 交接
+原始 RTC chunk -> OSQP 轨迹点平滑 -> 固定 30 Hz 轨迹 -> 既有 q/v/a 交接
 ```
 
-正常链路绕过 Action Gain。每次非初始请求都会根据当前计划的 commit 与 reserve 边界预测最早真实接管 tick，并从该时刻 follower 预测的 q/v 与新 chunk 的对应 future action 构造有限的恢复候选。
+默认设置为：
 
-真实 commit 边界仍优先使用原始候选。只有原始候选超过 q/v 硬交接限制或无法构造有界 q/v/a correction，而恢复候选可以时，才选择恢复候选。运行日志中的 `gain=bypassed`、`gain=fallback:<value>` 与 `handoff_candidate=recovery` 用于区分路径。
+```text
+NERO_OSQP_FAST_PATH=1
+NERO_OSQP_SPECULATIVE_RECOVERY=0
+NERO_CASADI_MAX_SOLVE_SEC=0.02
+```
+
+此时 OSQP 可行结果的 action 数量、phase 和 wall-clock 时间都不变；运行日志状态为
+`osqp_fixed_timeline`。如需复现实验性的 CasADi 慢路径，可在启动命令前设置
+`NERO_OSQP_FAST_PATH=0`。慢路径会预构建常见的 24-step、skip 5～9 NLP 形状，避免在控制过程中首次建图。
+
+正常快路径绕过 Action Gain 和并行恢复候选。若原始 chunk 无法在 trust region 内满足约束，仍可先经过 Action Gain 后重新求解 OSQP；只有第二次 OSQP 也失败才拒绝该 chunk。
+
+跨 chunk 的 q/v/a 连续性交给既有 handoff correction。运行日志中的
+`retime_breakdown` 分开记录 OSQP、CasADi、NLP 建图/调用和总 retime 时间，用于判断延迟来自哪一层。
 
 当前启动器使用 8 tick 最小提交与 8 tick 重规划余量。如果原始候选和恢复候选都无法安全交接，会在重规划边界丢弃候选并发送新的 RTC 请求；此路径明确禁用旧的 `reserve_exhaustion_follower_handoff`，不会在旧轨迹耗尽后强制进行无界 follower 接管。
 

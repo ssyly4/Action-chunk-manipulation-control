@@ -7,7 +7,7 @@
 ```text
 策略 WebSocket 输出（24 x 16 action chunk）
   -> OSQP 有界轨迹点平滑
-  -> CasADi 固定时域相位重定时
+  -> 默认固定 30 Hz 快路径；可选 CasADi 固定时域相位重定时
   -> 共享的滚动 RTC 队列与 q/v/a 连续交接
   -> NERO 流式关节 follower
   -> CPV 后端 -> CAN -> NERO 双臂
@@ -27,6 +27,8 @@
 | `NERO_TOPPRA_ALLOW_RESERVE_FOLLOWER_HANDOFF` | `0` | 当前正式运行时必须保持关闭 |
 
 全局控制时钟固定为 30 Hz。重定时只能重新分配一个 horizon 内的相位，不能改变该 horizon 的起止 wall-clock 时间。
+正式启动器默认 `NERO_OSQP_FAST_PATH=1`，OSQP 结果可行时跳过 CasADi；
+两级优化器的目标、约束和源码调用关系见 [OSQP/CasADi 控制链源码解读](OSQP_CASADI_控制链源码解读.md)。
 
 ## 模块职责
 

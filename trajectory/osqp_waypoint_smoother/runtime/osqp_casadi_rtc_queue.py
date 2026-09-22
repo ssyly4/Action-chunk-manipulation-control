@@ -76,6 +76,10 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
         self.osqp_enforce_boundary = (
             os.environ.get("NERO_OSQP_ENFORCE_BOUNDARY", "0") == "1"
         )
+        self.osqp_fast_path = os.environ.get("NERO_OSQP_FAST_PATH", "0") == "1"
+        self.speculative_recovery = (
+            os.environ.get("NERO_OSQP_SPECULATIVE_RECOVERY", "1") == "1"
+        )
         self._recovery_casadi_optimizer = CasadiPhaseOptimizer(
             self._casadi_optimizer.config
         )
@@ -115,7 +119,8 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             "[OSQP+CASADI] bounded waypoint smoother: "
             f"trust={np.rad2deg(self.osqp_trust_region):.3f}deg "
             f"boundary={'q/v' if self.osqp_enforce_boundary else 'handoff-owned'} "
-            "action_gain=precomputed-handoff-recovery"
+            f"fast_path={self.osqp_fast_path} "
+            f"speculative_recovery={self.speculative_recovery}"
         )
 
     def load(self, actions: np.ndarray, *, skip_steps: int = 0) -> None:
@@ -288,6 +293,8 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             boundary_position=boundary_position,
             boundary_velocity=boundary_velocity,
         )
+        raw_primary_smoothed = primary_smoothed
+        recovery_osqp_ms = 0.0
         action_gain_fallback = False
         if not primary_smoothed.feasible:
             action_gain_fallback = True
@@ -311,6 +318,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
                 boundary_position=boundary_position,
                 boundary_velocity=boundary_velocity,
             )
+            recovery_osqp_ms = recovered_primary.solve_ms
             if not recovered_primary.feasible:
                 raise RuntimeError(
                     "OSQP rejected both the raw and Action-Gain recovery chunk: "
@@ -332,8 +340,11 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             recovery_anchor = predicted_boundary.position
             recovery_velocity = predicted_boundary.velocity
             recovery_prediction_source = predicted_boundary.source
-        if not action_gain_fallback and not (
-            generation == 0 and loaded_at_tick == 0
+        if (
+            self.speculative_recovery
+            and not self.osqp_fast_path
+            and not action_gain_fallback
+            and not (generation == 0 and loaded_at_tick == 0)
         ):
             candidate_gain = scale_actions_to_envelope(
                 values,
@@ -369,7 +380,18 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             use_curvature=boundary_path_mode == "path_curvature",
         )
 
-        if generation == 0 and loaded_at_tick == 0:
+        casadi_primary_ms = 0.0
+        casadi_recovery_ms = 0.0
+        if self.osqp_fast_path:
+            retiming = self._fixed_timeline_result(
+                primary_smoothed,
+                skip_steps=skip_steps,
+                primary_smoothed=raw_primary_smoothed,
+                action_gain_fallback=action_gain_fallback,
+            )
+            recovery_plan = None
+            recovery_retime_ms = None
+        elif generation == 0 and loaded_at_tick == 0:
             raw_phase = self._raw_phase(primary_actions, skip_steps)
             retiming = self._initial_fallback(
                 primary_actions, skip_steps, raw_phase, primary_gain
@@ -437,6 +459,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
                     fallback_start_index=recovery_skip_steps,
                 )
             primary_optimized = primary_future.result()
+            casadi_primary_ms = primary_optimized.solve_ms
             retiming = self._retiming_result(
                 primary_optimized,
                 primary_smoothed,
@@ -449,6 +472,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             recovery_retime_ms = None
             if recovery_future is not None:
                 recovery_optimized = recovery_future.result()
+                casadi_recovery_ms = recovery_optimized.solve_ms
                 recovery_retiming = self._retiming_result(
                     recovery_optimized,
                     recovery_smoothed,
@@ -479,6 +503,20 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
                     f"@tick{recovery_start_tick}/action{recovery_skip_steps}"
                 )
 
+        total_retime_ms = (time.perf_counter() - started) * 1000.0
+        retime_breakdown = {
+            "fast_path": self.osqp_fast_path,
+            "fast_path_used": retiming.status == "osqp_fixed_timeline",
+            "osqp_primary_ms": raw_primary_smoothed.solve_ms,
+            "osqp_recovery_ms": recovery_osqp_ms,
+            "casadi_primary_ms": casadi_primary_ms,
+            "casadi_recovery_ms": casadi_recovery_ms,
+            "casadi_solver_cache_hit": retiming.metrics.get("solver_cache_hit"),
+            "casadi_solver_build_ms": retiming.metrics.get("solver_build_ms"),
+            "casadi_solver_call_ms": retiming.metrics.get("solver_call_ms"),
+            "casadi_solver_iterations": retiming.metrics.get("solver_iterations"),
+            "total_retime_ms": total_retime_ms,
+        }
         print(
             f"[OSQP+CASADI] generation={generation} "
             f"osqp={primary_smoothed.status} {primary_smoothed.solve_ms:.2f}ms "
@@ -487,7 +525,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             f"deviation={np.rad2deg(primary_smoothed.metrics['max_waypoint_deviation_rad']):.3f}deg "
             f"jerk={primary_smoothed.metrics['raw_jerk_ratio']:.2f}x->"
             f"{primary_smoothed.metrics['smoothed_jerk_ratio']:.2f}x "
-            f"casadi={retiming.status}"
+            f"retime={retiming.status} total={total_retime_ms:.1f}ms"
         )
         candidate = RecedingPlan(
             start_wall_tick=loaded_at_tick,
@@ -504,7 +542,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             raw_start_tick=raw_start_tick,
             loaded_at_tick=loaded_at_tick,
             skip_steps=skip_steps,
-            retime_ms=(time.perf_counter() - started) * 1000.0,
+            retime_ms=total_retime_ms,
             ready_started_at=started,
             action_gain=primary_gain,
             boundary_state_source=boundary_state_source,
@@ -521,6 +559,7 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             recovery_prediction_source=(
                 recovery_prediction_source if recovery_plan is not None else None
             ),
+            retime_breakdown=retime_breakdown,
         )
 
     def _raw_phase(self, actions: np.ndarray, skip_steps: int) -> np.ndarray:
@@ -552,6 +591,59 @@ class RecedingOsqpCasadiRtcQueue(RecedingCasadiRtcQueue):
             }
         )
         return metrics
+
+    def _fixed_timeline_result(
+        self,
+        smoothed,
+        *,
+        skip_steps: int,
+        primary_smoothed,
+        action_gain_fallback: bool,
+    ) -> RetimeResult:
+        """Use an already feasible OSQP path without nonlinear phase retiming."""
+        commands = smoothed.commands[skip_steps:].copy()
+        arm = commands[:, ARM_COLUMNS]
+        velocity = np.diff(arm, axis=0) * self.action_hz
+        acceleration = np.diff(velocity, axis=0) * self.action_hz
+        jerk = np.diff(acceleration, axis=0) * self.action_hz
+        phase = self._raw_phase(smoothed.commands, skip_steps)
+        phase_speed = np.full(len(phase), self.action_hz, dtype=np.float64)
+        phase_acceleration = np.zeros(len(phase), dtype=np.float64)
+        metrics = self._osqp_metrics(
+            smoothed,
+            primary_smoothed=primary_smoothed,
+            action_gain_fallback=action_gain_fallback,
+        )
+        metrics.update(
+            {
+                "sample_span_sec": (len(commands) - 1) / self.action_hz,
+                "boundary_duration_sec": len(commands) / self.action_hz,
+                "phase_distortion_rms_steps": 0.0,
+                "solver_cache_hit": None,
+                "solver_build_ms": 0.0,
+                "solver_call_ms": 0.0,
+                "solver_iterations": 0,
+                "casadi_skipped": True,
+                "casadi_skip_reason": (
+                    "OSQP fixed-rate result satisfies v/a/jerk limits"
+                ),
+            }
+        )
+        return RetimeResult(
+            status="osqp_fixed_timeline",
+            feasible=True,
+            fallback=False,
+            reason=None,
+            commands=commands,
+            phase_samples=phase,
+            raw_phase_samples=phase.copy(),
+            phase_speed_samples=phase_speed,
+            phase_acceleration_samples=phase_acceleration,
+            velocity=velocity,
+            acceleration=acceleration,
+            jerk=jerk,
+            metrics=metrics,
+        )
 
     def _retiming_result(
         self,
