@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nero-vla"
+name = "nero-action-chunk-control"
 version = "0.1.0"
-description = "NERO real-robot state monitoring and VLA integration"
+description = "NERO online action-chunk execution, trajectory shaping, and CPV control"
 requires-python = ">=3.10"
 dependencies = [
     "msgpack>=1.0",
