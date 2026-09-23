@@ -158,11 +158,11 @@ scripts/run_control.sh
 | `osqp_waypoint_smoother/runtime/right_policy_runtime.py` | 将单右臂 8D 策略接入同一轨迹和 follower 运行时。 |
 | `casadi_fixed_horizon_retimer/fixed_phase_optimizer/optimizer.py` | 固定总时长的相位优化器，支持速度、加速度、jerk 约束和 warm-start。 |
 | `casadi_fixed_horizon_retimer/runtime/casadi_rtc_queue.py` | 将 CasADi 相位优化接入滚动 RTC queue 的适配层。 |
-| `toppra_fixed_horizon_retimer/fixed_path_retimer/` | 路径表示、TOPPRA 重定时与滚动计划数据结构。 |
+| `toppra_fixed_horizon_retimer/fixed_path_retimer/` | 路径表示、TOPPRA 重定时与 receding-horizon 计划数据结构。 |
 | `toppra_fixed_horizon_retimer/runtime/receding_toppra_queue.py` | q/v/a 连续 handoff、reserve、commit、候选拒绝与重新请求策略。 |
 | `toppra_fixed_horizon_retimer/runtime/follower_state_bridge.py` | 在 queue 与 follower 之间共享最后发送命令、速度、加速度和期望速度。 |
 
-每个轨迹目录的 `tests/` 是该层的单元测试；`scripts/` 为离线回放、绘图和 action chunk 诊断。旧实机启动器已从 `main` 移除，可从提交 `08d40f1` 的历史中恢复。
+每个轨迹目录的 `tests/` 是该层的单元测试；仍保留的 `scripts/` 用于当前 action chunk 离线诊断。旧 overlap-splice 实验和旧实机启动器不保留在 `main`，需要时从 Git 历史恢复。
 
 ### 诊断与服务器部署
 

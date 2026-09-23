@@ -1289,8 +1289,3 @@ class RecedingToppraRtcQueue:
         pool = getattr(self, "_retime_pool", None)
         if pool is not None:
             pool.shutdown(wait=False, cancel_futures=True)
-
-
-# Keep the historical import working for existing local test commands. New code
-# must use RecedingToppraRtcQueue; the runtime no longer uses rolling overlap.
-RollingToppraRtcQueue = RecedingToppraRtcQueue

@@ -9,13 +9,6 @@ import numpy as np
 MODEL_IMAGE_SIZE = 224
 
 
-def rotate_external_image(image: np.ndarray) -> np.ndarray:
-    """Rotate the fixed external camera 90 degrees counterclockwise."""
-    if image.ndim != 3 or image.shape[2] != 3:
-        raise ValueError(f"Expected an HxWx3 external image, got {image.shape}")
-    return np.ascontiguousarray(np.rot90(image, k=1))
-
-
 def resize_with_pad(image: np.ndarray, size: int = MODEL_IMAGE_SIZE) -> np.ndarray:
     """Match OpenPI's linear resize-with-black-padding geometry."""
     height, width = image.shape[:2]
@@ -28,7 +21,3 @@ def resize_with_pad(image: np.ndarray, size: int = MODEL_IMAGE_SIZE) -> np.ndarr
     left = (size - resized_width) // 2
     output[top : top + resized_height, left : left + resized_width] = resized
     return np.ascontiguousarray(output)
-
-
-def prepare_external_model_image(image: np.ndarray, size: int = MODEL_IMAGE_SIZE) -> np.ndarray:
-    return resize_with_pad(rotate_external_image(image), size=size)

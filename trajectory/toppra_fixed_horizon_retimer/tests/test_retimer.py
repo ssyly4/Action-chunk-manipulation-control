@@ -9,8 +9,6 @@ from fixed_path_retimer import (
     RecedingConfig,
     RecedingFixedPathRetimer,
     RetimeConfig,
-    RollingConfig,
-    RollingFixedPathRetimer,
 )
 
 
@@ -88,57 +86,6 @@ class FixedPathRetimerTest(unittest.TestCase):
         result = retimer.retime(actions)
         expected = np.interp(result.raw_phase_samples, self.phase, actions[:, 2])
         np.testing.assert_allclose(result.commands[:, 2], expected, atol=1e-12)
-
-
-class RollingFixedPathRetimerTest(unittest.TestCase):
-    def setUp(self) -> None:
-        phase = np.arange(40, dtype=np.float64)
-        self.actions = np.column_stack((0.05 * np.sin(phase / 8.0), 0.01 * phase))
-        base = FixedPathRetimer(
-            RetimeConfig(
-                action_hz=30.0,
-                max_velocity=np.asarray((2.0, 1.0)),
-                max_acceleration=np.asarray((30.0, 20.0)),
-                max_spline_path_deviation=0.05,
-            )
-        )
-        self.rolling = RollingFixedPathRetimer(
-            base,
-            RollingConfig(
-                commit_ticks=8,
-                minimum_terminal_phase_speed=2.0,
-                max_splice_position_error=0.01,
-                max_splice_velocity_error=0.2,
-                max_splice_acceleration_error=5.0,
-            ),
-        )
-
-    def test_optimization_horizon_ends_without_stopping_motion(self) -> None:
-        plan = self.rolling.plan(self.actions[:24], start_wall_tick=100)
-        self.assertEqual(plan.retiming.status, "retimed", plan.retiming.reason)
-        self.assertEqual(len(plan.committed_commands), 8)
-        self.assertEqual(len(plan.lookahead_commands), 16)
-        self.assertGreater(plan.retiming.phase_speed_samples[-1], 1.0)
-        self.assertEqual(plan.handoff_wall_tick, 108)
-        self.assertEqual(plan.optimization_end_wall_tick, 124)
-
-    def test_overlap_splice_matches_position_velocity_and_acceleration(self) -> None:
-        old_plan = self.rolling.plan(self.actions[:24], start_wall_tick=100)
-        # The next optimization starts two ticks before the old commit and
-        # contains those old path rows as overlap/lookahead context.
-        new_plan = self.rolling.plan(self.actions[6:30], start_wall_tick=106)
-        splice = self.rolling.find_overlap_splice(
-            old_plan,
-            new_plan,
-            earliest_wall_tick=108,
-            latest_wall_tick=115,
-        )
-        self.assertTrue(splice.accepted)
-        self.assertGreaterEqual(splice.wall_tick, 108)
-        self.assertLessEqual(splice.position_error, 0.01)
-        self.assertLessEqual(splice.velocity_error, 0.2)
-        self.assertLessEqual(splice.acceleration_error, 5.0)
-        self.assertGreater(len(new_plan.commands_from_splice(splice, 8)), 0)
 
 
 class RecedingBoundaryVelocityTest(unittest.TestCase):

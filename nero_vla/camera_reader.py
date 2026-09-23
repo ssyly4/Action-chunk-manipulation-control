@@ -140,39 +140,3 @@ class V4L2CameraReader:
         finally:
             capture.release()
             self._capture = None
-
-
-class SyntheticCameraReader:
-    """Camera-compatible deterministic source used only for pipeline tests."""
-
-    def __init__(self, name: str, width: int = 1280, height: int = 720, fps: int = 30) -> None:
-        self.name, self.width, self.height, self.fps = name, width, height, fps
-        self._started_ns = time.monotonic_ns()
-        self._sequence = 0
-
-    def start(self) -> "SyntheticCameraReader":
-        return self
-
-    def stop(self) -> None:
-        return None
-
-    def wait_ready(self, timeout_sec: float = 5.0) -> CameraFrame:
-        return self.latest()
-
-    def latest(self, max_age_sec: float = 0.2, copy: bool = True) -> CameraFrame:
-        x = np.arange(self.width, dtype=np.uint16)[None, :]
-        y = np.arange(self.height, dtype=np.uint16)[:, None]
-        offset = 40 if self.name == "external" else 140
-        image = np.empty((self.height, self.width, 3), dtype=np.uint8)
-        image[..., 0] = (x + self._sequence) % 256
-        image[..., 1] = (y + offset) % 256
-        image[..., 2] = offset
-        now_mono_ns, now_unix_ns = time.monotonic_ns(), time.time_ns()
-        result = CameraFrame(image, now_mono_ns, now_unix_ns, self._sequence)
-        self._sequence += 1
-        return result
-
-    @property
-    def measured_hz(self) -> float:
-        elapsed = (time.monotonic_ns() - self._started_ns) / 1e9
-        return self._sequence / elapsed if elapsed > 0 else 0.0

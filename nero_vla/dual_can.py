@@ -11,8 +11,6 @@ import time
 from typing import Iterable
 
 
-LEADER_CAN_PORT = os.environ.get("NERO_LEADER_CAN", "can0")
-FOLLOWER_CAN_PORT = os.environ.get("NERO_FOLLOWER_CAN", "can1")
 BRIDGE_SOCKET_PATH = os.environ.get(
     "NERO_CAN_BRIDGE_SOCKET", "/tmp/nero_leader_follower_bridge.sock"
 )
@@ -24,7 +22,6 @@ CAN_SFF_MASK = 0x000007FF
 CAN_FRAME = struct.Struct("=IB3x8s")
 
 LEADER_JOINT_IDS = frozenset({0x155, 0x156, 0x157, 0x170})
-LEADER_FORWARD_IDS = frozenset({0x151, 0x155, 0x156, 0x157, 0x159, 0x170})
 FOLLOWER_JOINT_IDS = frozenset(range(0x251, 0x258))
 
 
@@ -177,138 +174,3 @@ def require_bridge_not_forwarding(socket_path: str = BRIDGE_SOCKET_PATH) -> dict
             "follower control: nero_can_bridge.py pause"
         )
     return status
-
-
-def wait_for_leader_pose(
-    target_deg: Iterable[float],
-    *,
-    interface: str = LEADER_CAN_PORT,
-    tolerance_deg: float = 1.0,
-    timeout_sec: float = 120.0,
-) -> list[float]:
-    import math
-
-    import numpy as np
-    from pyAgxArm import AgxArmFactory, ArmModel, NeroFW, create_agx_arm_config
-
-    target = np.asarray(list(target_deg), dtype=np.float64)
-    if target.shape != (7,):
-        raise ValueError("leader target must contain seven joints")
-    require_can_role(interface, "leader")
-    config = create_agx_arm_config(
-        robot=ArmModel.NERO,
-        firmeware_version=NeroFW.V120,
-        interface="socketcan",
-        channel=interface,
-    )
-    robot = AgxArmFactory.create_arm(config)
-    robot.connect()
-    try:
-        warmup_deadline = time.monotonic() + 0.25
-        deadline = time.monotonic() + timeout_sec
-        while time.monotonic() < deadline:
-            feedback = robot.get_leader_joint_angles()
-            if feedback is not None:
-                current = np.asarray(
-                    [math.degrees(value) for value in feedback.msg], dtype=np.float64
-                )
-                if current.shape == (7,) and np.isfinite(current).all():
-                    if (
-                        time.monotonic() >= warmup_deadline
-                        and float(np.max(np.abs(target - current))) <= tolerance_deg
-                    ):
-                        return current.tolist()
-            time.sleep(0.05)
-    finally:
-        robot.disconnect()
-    raise TimeoutError(
-        f"leader did not reach the capture pose within {timeout_sec:.1f}s on {interface}"
-    )
-
-
-def read_leader_pose(
-    interface: str = LEADER_CAN_PORT,
-    timeout_sec: float = 2.0,
-) -> list[float]:
-    import math
-
-    import numpy as np
-    from pyAgxArm import AgxArmFactory, ArmModel, NeroFW, create_agx_arm_config
-
-    require_can_role(interface, "leader")
-    config = create_agx_arm_config(
-        robot=ArmModel.NERO,
-        firmeware_version=NeroFW.V120,
-        interface="socketcan",
-        channel=interface,
-    )
-    robot = AgxArmFactory.create_arm(config)
-    robot.connect()
-    try:
-        warmup_deadline = time.monotonic() + 0.25
-        deadline = time.monotonic() + timeout_sec
-        latest: list[float] | None = None
-        while time.monotonic() < deadline:
-            feedback = robot.get_leader_joint_angles()
-            if feedback is not None:
-                current = np.asarray(
-                    [math.degrees(value) for value in feedback.msg], dtype=np.float64
-                )
-                if current.shape == (7,) and np.isfinite(current).all():
-                    latest = current.tolist()
-                    if time.monotonic() >= warmup_deadline:
-                        return latest
-            time.sleep(0.02)
-    finally:
-        robot.disconnect()
-    raise TimeoutError(f"no complete leader pose received on {interface}")
-
-
-def read_follower_pose(
-    interface: str = FOLLOWER_CAN_PORT,
-    timeout_sec: float = 2.0,
-) -> list[float]:
-    import math
-
-    import numpy as np
-    from pyAgxArm import AgxArmFactory, ArmModel, NeroFW, create_agx_arm_config
-
-    require_can_role(interface, "follower")
-    config = create_agx_arm_config(
-        robot=ArmModel.NERO,
-        firmeware_version=NeroFW.V120,
-        interface="socketcan",
-        channel=interface,
-    )
-    robot = AgxArmFactory.create_arm(config)
-    robot.connect()
-    try:
-        warmup_deadline = time.monotonic() + 0.25
-        deadline = time.monotonic() + timeout_sec
-        while time.monotonic() < deadline:
-            feedback = robot.get_joint_angles()
-            if feedback is not None and time.monotonic() >= warmup_deadline:
-                current = np.asarray(
-                    [math.degrees(value) for value in feedback.msg], dtype=np.float64
-                )
-                if current.shape == (7,) and np.isfinite(current).all():
-                    return current.tolist()
-            time.sleep(0.02)
-    finally:
-        robot.disconnect()
-    raise TimeoutError(f"no complete follower pose received on {interface}")
-
-
-def measure_role_pose_mismatch(
-    leader_can: str = LEADER_CAN_PORT,
-    follower_can: str = FOLLOWER_CAN_PORT,
-) -> dict:
-    leader = read_leader_pose(leader_can)
-    follower = read_follower_pose(follower_can)
-    errors = [leader_value - follower_value for leader_value, follower_value in zip(leader, follower)]
-    return {
-        "leader_deg": leader,
-        "follower_deg": follower,
-        "error_deg": errors,
-        "max_abs_error_deg": max(abs(value) for value in errors),
-    }
