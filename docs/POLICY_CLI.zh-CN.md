@@ -69,6 +69,23 @@ NERO_POLICY_DURATION=30 \
   --execute
 ```
 
+## 启动右臂抓瓶放箱模型 `119999`
+
+```bash
+cd /home/dev/nero_bimanual_control
+./scripts/run_policy.sh --task bottle_to_box_right --preflight-only
+NERO_POLICY_DURATION=20 \
+./scripts/run_policy.sh --task bottle_to_box_right --execute
+```
+
+切换到 `96000`：
+
+```bash
+./scripts/run_policy.sh --task bottle_to_box_right --checkpoint 96000 --preflight-only
+NERO_POLICY_DURATION=20 \
+./scripts/run_policy.sh --task bottle_to_box_right --checkpoint 96000 --execute
+```
+
 ## 查看服务器服务
 
 ```bash
