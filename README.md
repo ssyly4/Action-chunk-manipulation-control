@@ -145,7 +145,6 @@ scripts/run_control.sh
 | `gripper_controller.py` | 夹爪归一化位置、限速与反馈闭环控制。 |
 | `robot_config.py` | NERO 关节限制、CPV 模式限制和 Home 配置常量。 |
 | `health_checks.py` | 运动前完整关节反馈、使能/CPV 状态和运行期驱动器/夹爪故障检查。 |
-| `lift_assist.py` | 可选的抓取后抬升、预抓取下探和高度保护辅助逻辑；默认主路径不应随意启用。 |
 | `image_tools.py` | 相机图像缩放、填充、旋转等 observation 预处理。 |
 | `task_config.py` | 读取 `config/tasks/*.toml`，校验任务配置并输出 Shell 环境变量。 |
 

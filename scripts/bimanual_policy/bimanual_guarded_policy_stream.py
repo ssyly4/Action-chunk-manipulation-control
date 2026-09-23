@@ -42,8 +42,6 @@ from nero_vla.health_checks import check_gripper_health
 from nero_vla.health_checks import wait_complete_joint_feedback
 from nero_vla.health_checks import wait_cpv_mode, wait_enabled
 from nero_vla.image_tools import resize_with_pad
-from nero_vla.lift_assist import PreGraspDescentAssist
-from nero_vla.lift_assist import PostReleaseHeightGuard
 from nero_vla.policy_client import OpenPiPolicyClient, port_open
 from nero_vla.robot_config import NERO_CPV_JOINT_LIMIT_OVERRIDES_RAD
 from nero_vla.trajectory_executor import RateLimitedJointFollower, TrajectorySample
@@ -206,12 +204,6 @@ def main() -> None:
     )
     parser.add_argument("--rtc-handoff-decay-steps", type=int, default=0)
     parser.add_argument("--rtc-max-handoff-error-deg", type=float, default=2.5)
-    parser.add_argument(
-        "--post-release-rtc-max-right-handoff-error-deg",
-        type=float,
-        default=2.5,
-        help="Right-arm RTC handoff limit only while the post-release Cartesian guard is overriding policy.",
-    )
     parser.add_argument("--rtc-num-steps", type=int, default=3)
     parser.add_argument("--rtc-max-guidance-weight", type=float, default=1.0)
     parser.add_argument("--action-gain", type=float, default=1.0)
@@ -245,16 +237,6 @@ def main() -> None:
     parser.add_argument("--gripper-speed-mm-s", type=float, default=200.0)
     parser.add_argument("--gripper-force-n", type=float, default=1.0)
     parser.add_argument(
-        "--right-pregrasp-descent-mm",
-        type=float,
-        default=0.0,
-        help="One-shot right TCP descent after confirmed close intent; zero disables it.",
-    )
-    parser.add_argument("--pregrasp-close-threshold", type=float, default=0.5)
-    parser.add_argument("--pregrasp-release-threshold", type=float, default=0.25)
-    parser.add_argument("--pregrasp-confirmations", type=int, default=3)
-    parser.add_argument("--pregrasp-timeout-sec", type=float, default=2.0)
-    parser.add_argument(
         "--exit-on-right-gripper-cycle",
         action="store_true",
         help="Exit successfully after the right gripper closes, reopens, and both arms settle.",
@@ -262,17 +244,6 @@ def main() -> None:
     parser.add_argument("--stage-close-threshold", type=float, default=0.25)
     parser.add_argument("--stage-open-threshold", type=float, default=0.75)
     parser.add_argument("--stage-settle-sec", type=float, default=0.5)
-    parser.add_argument("--right-post-release-height-guard", action="store_true")
-    parser.add_argument("--post-release-floor-mm", type=float, default=195.0)
-    parser.add_argument("--post-release-recovery-mm", type=float, default=210.0)
-    parser.add_argument("--post-release-height-timeout-sec", type=float, default=6.0)
-    parser.add_argument("--post-release-forward-extension-mm", type=float, default=0.0)
-    parser.add_argument("--post-release-extension-ramp-sec", type=float, default=1.0)
-    parser.add_argument(
-        "--post-release-lock-height",
-        action="store_true",
-        help="After right-gripper release, hold the configured TCP height while retaining policy XY/orientation.",
-    )
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--confirm", default="")
@@ -321,32 +292,10 @@ def main() -> None:
         parser.error("gripper-speed-mm-s must be in [1, 300]")
     if not 0.2 <= args.gripper_force_n <= 2.0:
         parser.error("gripper-force-n must be in [0.2, 2]")
-    if not 0.0 <= args.right_pregrasp_descent_mm <= 10.0:
-        parser.error("right-pregrasp-descent-mm must be in [0, 10]")
-    if not 0.1 <= args.pregrasp_close_threshold <= 0.8:
-        parser.error("pregrasp-close-threshold must be in [0.1, 0.8]")
-    if not 0.05 <= args.pregrasp_release_threshold < args.pregrasp_close_threshold:
-        parser.error("pregrasp-release-threshold must be below the close threshold")
-    if not 1 <= args.pregrasp_confirmations <= 10:
-        parser.error("pregrasp-confirmations must be in [1, 10]")
-    if not 0.5 <= args.pregrasp_timeout_sec <= 5.0:
-        parser.error("pregrasp-timeout-sec must be in [0.5, 5]")
     if not 0.05 <= args.stage_close_threshold < args.stage_open_threshold <= 1.0:
         parser.error("stage gripper thresholds must satisfy 0.05 <= close < open <= 1")
     if not 0.1 <= args.stage_settle_sec <= 5.0:
         parser.error("stage-settle-sec must be in [0.1, 5]")
-    if not 80.0 <= args.post_release_floor_mm <= 300.0:
-        parser.error("post-release-floor-mm must be in [80, 300]")
-    if not args.post_release_floor_mm + 5.0 <= args.post_release_recovery_mm <= 320.0:
-        parser.error("post-release-recovery-mm must be at least 5 mm above the floor")
-    if args.post_release_recovery_mm - args.post_release_floor_mm > 50.0:
-        parser.error("post-release recovery band must not exceed 50 mm")
-    if not 1.0 <= args.post_release_height_timeout_sec <= 10.0:
-        parser.error("post-release-height-timeout-sec must be in [1, 10]")
-    if not 0.0 <= args.post_release_forward_extension_mm <= 40.0:
-        parser.error("post-release-forward-extension-mm must be in [0, 40]")
-    if not 0.25 <= args.post_release_extension_ramp_sec <= 3.0:
-        parser.error("post-release-extension-ramp-sec must be in [0.25, 3]")
     if not 2 <= args.action_horizon <= 64:
         parser.error("action-horizon must be in [2, 64]")
     if not 2 <= args.fixed_horizon_steps <= args.action_horizon:
@@ -371,15 +320,6 @@ def main() -> None:
             )
         if not 0.25 <= args.rtc_max_handoff_error_deg <= 3.0:
             parser.error("rtc-max-handoff-error-deg must be in [0.25, 3]")
-        if not (
-            args.rtc_max_handoff_error_deg
-            <= args.post_release_rtc_max_right_handoff_error_deg
-            <= 6.0
-        ):
-            parser.error(
-                "post-release-rtc-max-right-handoff-error-deg must be between "
-                "rtc-max-handoff-error-deg and 6"
-            )
         if not 1 <= args.rtc_num_steps <= 10:
             parser.error("rtc-num-steps must be in [1, 10]")
         if not 0.1 <= args.rtc_max_guidance_weight <= 10.0:
@@ -454,11 +394,6 @@ def main() -> None:
         "rtc_max_handoff_error_deg": (
             args.rtc_max_handoff_error_deg if args.chunk_mode == "rtc_time" else None
         ),
-        "post_release_rtc_max_right_handoff_error_deg": (
-            args.post_release_rtc_max_right_handoff_error_deg
-            if args.chunk_mode == "rtc_time"
-            else None
-        ),
         "rtc_delay_prediction_clock": (
             "fixed_override"
             if args.rtc_inference_delay_steps is not None
@@ -505,18 +440,6 @@ def main() -> None:
         "max_gripper_consecutive": max_gripper_consecutive,
         "gripper_catchup_hold_sec": args.gripper_catchup_hold_sec,
         "fail_on_gripper_catchup_timeout": args.fail_on_gripper_catchup_timeout,
-        "right_pregrasp_descent_mm": args.right_pregrasp_descent_mm,
-        "pregrasp_close_threshold": args.pregrasp_close_threshold,
-        "pregrasp_release_threshold": args.pregrasp_release_threshold,
-        "pregrasp_confirmations": args.pregrasp_confirmations,
-        "pregrasp_triggered": False,
-        "pregrasp_completed": False,
-        "right_post_release_height_guard": args.right_post_release_height_guard,
-        "post_release_floor_mm": args.post_release_floor_mm,
-        "post_release_recovery_mm": args.post_release_recovery_mm,
-        "post_release_forward_extension_mm": args.post_release_forward_extension_mm,
-        "post_release_extension_ramp_sec": args.post_release_extension_ramp_sec,
-        "post_release_height_triggered": False,
     }
 
     for camera in cameras:
@@ -696,10 +619,8 @@ def main() -> None:
             progress = BimanualRtcActionQueue(
                 action_hz=args.rtc_action_hz,
                 handoff_decay_steps=args.rtc_handoff_decay_steps,
-                # The stream applies the final handoff rule below because the
-                # post-release Cartesian guard has an intentionally different
-                # limit for the guarded right arm.  Keeping a second global
-                # queue-level limit would reject that explicitly safe case.
+                # The stream validates per-arm handoff error before loading a
+                # replacement, so the queue must not apply a duplicate limit.
                 max_handoff_error_rad=None,
             )
         else:
@@ -739,31 +660,6 @@ def main() -> None:
         )
         right_gripper_follower.initialize(
             float(right_gripper_initial.msg.value), now=started - period
-        )
-        pregrasp_assist = PreGraspDescentAssist(
-            enabled=args.right_pregrasp_descent_mm > 0.0,
-            descent_distance_m=(
-                args.right_pregrasp_descent_mm / 1000.0
-                if args.right_pregrasp_descent_mm > 0.0
-                else 0.005
-            ),
-            close_threshold=args.pregrasp_close_threshold,
-            confirmations=args.pregrasp_confirmations,
-            release_gripper_threshold=args.pregrasp_release_threshold,
-            timeout_sec=args.pregrasp_timeout_sec,
-        )
-        post_release_height_guard = PostReleaseHeightGuard(
-            enabled=args.right_post_release_height_guard,
-            floor_height_m=args.post_release_floor_mm / 1000.0,
-            recovery_height_m=args.post_release_recovery_mm / 1000.0,
-            close_threshold=args.stage_close_threshold,
-            open_threshold=args.stage_open_threshold,
-            confirmations=3,
-            timeout_sec=args.post_release_height_timeout_sec,
-            joint_limits_rad=joint_limits(right_config),
-            forward_extension_m=args.post_release_forward_extension_mm / 1000.0,
-            extension_ramp_sec=args.post_release_extension_ramp_sec,
-            lock_height=args.post_release_lock_height,
         )
         if args.chunk_mode == "rtc":
             progress.push(
@@ -830,9 +726,6 @@ def main() -> None:
             rtc_queue_hold_started: float | None = None
             rtc_rejection_started: float | None = None
             rtc_rejected_chunks = 0
-            rtc_generation = 0
-            rtc_request_generation: int | None = None
-            post_release_was_overriding = False
             while time.monotonic() - started < args.duration:
                 now = time.monotonic()
                 if now < next_tick:
@@ -854,7 +747,6 @@ def main() -> None:
                         if rtc_request is None:
                             raise RuntimeError("RTC response has no matching request context")
                         completed_request = rtc_request
-                        completed_request_generation = rtc_request_generation
                         accepted_at = now
                         nominal_elapsed_delay_steps = math.ceil(
                             (accepted_at - completed_request.requested_at)
@@ -863,29 +755,6 @@ def main() -> None:
                         consumed_delay_steps = progress.consumed_since(completed_request)
                         rtc_latency_history.append(completed["inference_ms"] / 1000.0)
                         rtc_request = None
-                        rtc_request_generation = None
-                        # A Cartesian safety assist may have re-anchored the
-                        # queue after this request was sent.  Its result was
-                        # conditioned on the old policy tail, so it must never
-                        # be used to restart the live command timeline.
-                        if completed_request_generation != rtc_generation:
-                            chunk_stream.write(
-                                json.dumps(
-                                    {
-                                        "chunk": chunk_count,
-                                        "accepted": False,
-                                        "discarded": "stale_after_external_reanchor",
-                                        "rtc_alignment_mode": "elapsed_time",
-                                        **completed,
-                                    },
-                                    default=lambda value: value.tolist()
-                                    if isinstance(value, np.ndarray)
-                                    else value,
-                                )
-                                + "\n"
-                            )
-                            chunk_stream.flush()
-                            continue
                         # This mode deliberately does not search the action
                         # chunk against robot feedback. Rows elapsed while the
                         # request was in flight are skipped by the fixed action
@@ -911,22 +780,17 @@ def main() -> None:
                                 float(handoff_errors_rad[0]),
                                 float(handoff_errors_rad[1]),
                             )
-                            right_handoff_limit_deg = (
-                                args.post_release_rtc_max_right_handoff_error_deg
-                                if post_release_height_guard.overriding_policy
-                                else args.rtc_max_handoff_error_deg
-                            )
                             if (
                                 left_handoff_error_rad
                                 > np.deg2rad(args.rtc_max_handoff_error_deg)
                                 or right_handoff_error_rad
-                                > np.deg2rad(right_handoff_limit_deg)
+                                > np.deg2rad(args.rtc_max_handoff_error_deg)
                             ):
                                 raise RuntimeError(
                                     "RTC handoff rejected: "
                                     f"left_error_deg={np.rad2deg(left_handoff_error_rad):.3f} "
                                     f"right_error_deg={np.rad2deg(right_handoff_error_rad):.3f} "
-                                    f"right_limit_deg={right_handoff_limit_deg:.3f}"
+                                    f"limit_deg={args.rtc_max_handoff_error_deg:.3f}"
                                 )
                         except (RuntimeError, ValueError) as exc:
                             rtc_rejected_chunks += 1
@@ -1268,7 +1132,6 @@ def main() -> None:
                         execution_horizon=args.rtc_execution_horizon,
                         predicted_delay_steps=predicted_delay_steps,
                     )
-                    rtc_request_generation = rtc_generation
                     packet = capture_observation()
                     packet[0]["__openpi_rtc"] = {
                         "prev_chunk_left_over": rtc_request.previous_actions,
@@ -1305,42 +1168,6 @@ def main() -> None:
                     if target.right_gripper_target is not None
                     else normalized_gripper(last_right_gripper_command)
                 )
-                if post_release_height_guard.observe(
-                    now=now,
-                    joint_rad=last_right_feedback,
-                    measured_gripper_state=normalized_gripper(
-                        last_right_gripper_feedback
-                    ),
-                ):
-                    summary["post_release_height_triggered"] = True
-                    summary["post_release_height_triggered_sec"] = now - started
-                triggered = pregrasp_assist.observe(
-                    now=now,
-                    joint_rad=last_right_feedback,
-                    measured_gripper_state=normalized_gripper(
-                        last_right_gripper_feedback
-                    ),
-                    policy_gripper_target=raw_right_grip_target,
-                )
-                if triggered:
-                    summary["pregrasp_triggered"] = True
-                    summary["pregrasp_triggered_sec"] = now - started
-                assisted_right_target = pregrasp_assist.arm_target(
-                    now=now,
-                    measured_joint_rad=last_right_feedback,
-                )
-                policy_right_target = (
-                    last_right_command
-                    if target.right_target is None
-                    else target.right_target
-                )
-                height_guard_target = post_release_height_guard.arm_target(
-                    now=now,
-                    measured_joint_rad=last_right_feedback,
-                    policy_joint_rad=policy_right_target,
-                )
-                if pregrasp_assist.state == "completed":
-                    summary["pregrasp_completed"] = True
                 right_close_gap = (
                     normalized_gripper(last_right_gripper_feedback)
                     - raw_right_grip_target
@@ -1351,13 +1178,11 @@ def main() -> None:
                 elif not closing_needs_catchup:
                     gripper_catchup_started = None
                 gripper_catchup_hold = bool(
-                    not pregrasp_assist.active
-                    and gripper_catchup_started is not None
+                    gripper_catchup_started is not None
                     and now - gripper_catchup_started < args.gripper_catchup_hold_sec
                 )
                 if (
                     args.fail_on_gripper_catchup_timeout
-                    and not pregrasp_assist.active
                     and gripper_catchup_started is not None
                     and now - gripper_catchup_started >= args.gripper_catchup_hold_sec
                 ):
@@ -1375,23 +1200,6 @@ def main() -> None:
                     right_arm_target = last_right_command
                     left_arm_status = "stage_release_hold"
                     right_arm_status = "stage_release_hold"
-                elif pregrasp_assist.active:
-                    left_arm_target = last_left_command
-                    right_arm_target = assisted_right_target
-                    left_arm_status = f"right_pregrasp_{pregrasp_assist.state}"
-                    right_arm_status = left_arm_status
-                elif height_guard_target is not None:
-                    left_arm_target = (
-                        last_left_command
-                        if gripper_catchup_hold or target.left_target is None
-                        else target.left_target
-                    )
-                    right_arm_target = height_guard_target
-                    # The left arm remains on the unmodified policy stream. The
-                    # right guard is also a continuously updated trajectory, so
-                    # retain the streaming follower mode for both sides.
-                    left_arm_status = target.status
-                    right_arm_status = target.status
                 else:
                     left_arm_target = (
                         last_left_command if gripper_catchup_hold else target.left_target
@@ -1453,9 +1261,7 @@ def main() -> None:
                     if target.left_gripper_target is None
                     else target.left_gripper_target
                 )
-                right_grip_target = pregrasp_assist.gripper_target(
-                    raw_right_grip_target
-                )
+                right_grip_target = raw_right_grip_target
                 left_grip_command = left_gripper_follower.step(
                     left_grip_target,
                     measured_width_m=float(left_grip_status.msg.value),
@@ -1519,37 +1325,6 @@ def main() -> None:
                 last_feedback_time = now
                 last_left_command = left_limited.command.copy()
                 last_right_command = right_limited.command.copy()
-
-                post_release_overriding = height_guard_target is not None
-                if (
-                    args.chunk_mode == "rtc_time"
-                    and post_release_overriding
-                    and not post_release_was_overriding
-                ):
-                    # Any post-release Cartesian correction, including a
-                    # Z-only height lock, intentionally diverges from the
-                    # policy queue. Restart RTC from the CPV command rather
-                    # than handing the stale queue tail to the new chunk.
-                    progress.reanchor_hold(
-                        np.concatenate(
-                            (
-                                last_left_command,
-                                [normalized_gripper(last_left_gripper_command)],
-                                last_right_command,
-                                [normalized_gripper(last_right_gripper_command)],
-                            )
-                        ),
-                        now=now,
-                    )
-                    rtc_generation += 1
-                    summary["post_release_rtc_reanchors"] = int(
-                        summary.get("post_release_rtc_reanchors", 0)
-                    ) + 1
-                    print(
-                        "RTC re-anchored after post-release Cartesian assist",
-                        flush=True,
-                    )
-                post_release_was_overriding = post_release_overriding
 
                 right_gripper_normalized = normalized_gripper(
                     float(right_grip_status.msg.value)
@@ -1638,12 +1413,6 @@ def main() -> None:
                         if stage_settle_started is None
                         else now - stage_settle_started
                     ),
-                    "pregrasp_assist": pregrasp_assist.status(
-                        right_measured
-                    ).__dict__,
-                    "post_release_height_guard": post_release_height_guard.status(
-                        right_measured
-                    ).__dict__,
                 }
                 tick_stream.write(json.dumps(row, separators=(",", ":")) + "\n")
                 if now >= next_health:
@@ -1670,9 +1439,7 @@ def main() -> None:
                         f"{rtc_progress_text}"
                         f"proj={row['projection_error_deg'] if row['projection_error_deg'] is not None else -1:.2f}deg "
                         f"grip={float(left_grip_status.msg.value)*1000:.1f}/"
-                        f"{float(right_grip_status.msg.value)*1000:.1f}mm "
-                        f"pregrasp={pregrasp_assist.state} "
-                        f"postrelease={post_release_height_guard.state}",
+                        f"{float(right_grip_status.msg.value)*1000:.1f}mm",
                         flush=True,
                     )
                     tick_stream.flush()
