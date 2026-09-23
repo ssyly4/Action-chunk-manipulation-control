@@ -1,4 +1,4 @@
-# Policy 启动命令
+# Policy 与控制启动命令
 
 所有命令都在控制机执行：
 
@@ -14,17 +14,29 @@ cd /home/dev/nero_bimanual_control
 ./scripts/run_policy.sh --task towel_fold --show-config
 ```
 
-启动服务并预检，不运动：
+只启动或切换服务器模型，不访问 CAN、相机和机械臂：
 
 ```bash
-./scripts/run_policy.sh --task towel_fold --preflight-only
+./scripts/policy_server.sh start --task towel_fold
 ```
 
-实机运行 30 秒：
+确认服务状态：
+
+```bash
+./scripts/policy_server.sh status
+```
+
+本机预检，不切换服务器模型、不发送机械臂命令：
+
+```bash
+./scripts/run_control.sh --task towel_fold --preflight-only
+```
+
+实机运行 30 秒，不切换服务器模型：
 
 ```bash
 NERO_POLICY_DURATION=30 \
-./scripts/run_policy.sh --task towel_fold --execute
+./scripts/run_control.sh --task towel_fold --execute
 ```
 
 ## 切换同一组训练的 checkpoint
@@ -32,11 +44,13 @@ NERO_POLICY_DURATION=30 \
 例如切换到 `96000`：
 
 ```bash
-./scripts/run_policy.sh --task towel_fold --checkpoint 96000 --show-config
-./scripts/run_policy.sh --task towel_fold --checkpoint 96000 --preflight-only
+./scripts/policy_server.sh start --task towel_fold --checkpoint 96000
+./scripts/run_control.sh --task towel_fold --checkpoint 96000 --preflight-only
 NERO_POLICY_DURATION=30 \
-./scripts/run_policy.sh --task towel_fold --checkpoint 96000 --execute
+./scripts/run_control.sh --task towel_fold --checkpoint 96000 --execute
 ```
+
+服务端与控制端的 `--task`、`--checkpoint` 必须一致；不一致时控制端会拒绝运行。
 
 当前主模型可选：
 
@@ -46,22 +60,28 @@ NERO_POLICY_DURATION=30 \
 
 ## 启动 pilot70 模型 `95999`
 
-预检：
+启动模型服务：
 
 ```bash
-./scripts/run_policy.sh \
+./scripts/policy_server.sh start \
+  --task towel_fold \
+  --policy-config pi05_nero_towel_fullflow_pilot70_next_feedback_event4_h24_split_v3 \
+  --policy-source /home/dev/workspace/nero_training/checkpoints/pi05_nero_towel_fullflow_pilot70_next_feedback_event4_h24_split_v3/lora_micro96000_towel_fullflow_pilot70_next_feedback_h24_eff4_v3/95999 \
+  --stage-name towel_pilot70_95999
+```
+
+本机预检和实机运行时复用同一组模型选择参数：
+
+```bash
+./scripts/run_control.sh \
   --task towel_fold \
   --policy-config pi05_nero_towel_fullflow_pilot70_next_feedback_event4_h24_split_v3 \
   --policy-source /home/dev/workspace/nero_training/checkpoints/pi05_nero_towel_fullflow_pilot70_next_feedback_event4_h24_split_v3/lora_micro96000_towel_fullflow_pilot70_next_feedback_h24_eff4_v3/95999 \
   --stage-name towel_pilot70_95999 \
   --preflight-only
-```
 
-实机运行：
-
-```bash
 NERO_POLICY_DURATION=30 \
-./scripts/run_policy.sh \
+./scripts/run_control.sh \
   --task towel_fold \
   --policy-config pi05_nero_towel_fullflow_pilot70_next_feedback_event4_h24_split_v3 \
   --policy-source /home/dev/workspace/nero_training/checkpoints/pi05_nero_towel_fullflow_pilot70_next_feedback_event4_h24_split_v3/lora_micro96000_towel_fullflow_pilot70_next_feedback_h24_eff4_v3/95999 \
@@ -73,31 +93,34 @@ NERO_POLICY_DURATION=30 \
 
 ```bash
 cd /home/dev/nero_bimanual_control
-./scripts/run_policy.sh --task bottle_to_box_right --preflight-only
+./scripts/policy_server.sh start --task bottle_to_box_right
+./scripts/run_control.sh --task bottle_to_box_right --preflight-only
 NERO_POLICY_DURATION=20 \
-./scripts/run_policy.sh --task bottle_to_box_right --execute
+./scripts/run_control.sh --task bottle_to_box_right --execute
 ```
 
 切换到 `96000`：
 
 ```bash
-./scripts/run_policy.sh --task bottle_to_box_right --checkpoint 96000 --preflight-only
+./scripts/policy_server.sh start --task bottle_to_box_right --checkpoint 96000
+./scripts/run_control.sh --task bottle_to_box_right --checkpoint 96000 --preflight-only
 NERO_POLICY_DURATION=20 \
-./scripts/run_policy.sh --task bottle_to_box_right --checkpoint 96000 --execute
-```
-
-## 查看服务器服务
-
-```bash
-ssh dev@172.24.1.154 \
-  "docker exec cuda12_8_torch_2_9_1_core pgrep -af '[s]erve_policy.py'; ss -ltn | grep ':8000'"
+./scripts/run_control.sh --task bottle_to_box_right --checkpoint 96000 --execute
 ```
 
 ## 停止服务器服务
 
 ```bash
-ssh dev@172.24.1.154 \
-  "docker exec cuda12_8_torch_2_9_1_core pkill -f '[s]cripts/serve_policy.py' 2>/dev/null || true"
+./scripts/policy_server.sh stop
+```
+
+## 兼容的一键入口
+
+`run_policy.sh` 仍可自动启动或切换服务，再执行本机预检/控制：
+
+```bash
+./scripts/run_policy.sh --task towel_fold --preflight-only
+NERO_POLICY_DURATION=30 ./scripts/run_policy.sh --task towel_fold --execute
 ```
 
 已有模型和 checkpoint 对应关系见

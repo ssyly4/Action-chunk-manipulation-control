@@ -45,29 +45,31 @@ cd /home/dev/nero_bimanual_control
 cp config/paths.env.example config/paths.env
 ```
 
-所有策略任务共用一个入口，任务差异由 `config/tasks/*.toml` 描述：
+任务差异由 `config/tasks/*.toml` 描述。正式运行时，模型服务与本机控制分开启动：
 
 ```bash
-# 只验证 CAN、相机、策略服务和运行时，不发送机械臂命令
-./scripts/run_policy.sh --task towel_fold --preflight-only
+# 服务器：启动默认毛巾模型，不访问本机硬件
+./scripts/policy_server.sh start --task towel_fold
 
-# 通过预检后才允许实机执行
-./scripts/run_policy.sh --task towel_fold --execute
+# 控制机：验证当前服务匹配，并检查 CAN、相机和运行时
+./scripts/run_control.sh --task towel_fold --preflight-only
 
-# 单右臂抓瓶入框
-./scripts/run_policy.sh --task bottle_to_box_right --preflight-only
+# 控制机：通过预检后执行
+./scripts/run_control.sh --task towel_fold --execute
 ```
 
 切换同一实验内的 checkpoint，不需要修改 TOML：
 
 ```bash
-./scripts/run_policy.sh --task towel_fold --checkpoint 96000 --show-config
-./scripts/run_policy.sh --task towel_fold --checkpoint 96000 --preflight-only
+./scripts/policy_server.sh start --task towel_fold --checkpoint 96000
+./scripts/run_control.sh --task towel_fold --checkpoint 96000 --preflight-only
 ```
 
 切换到另一个训练实验时，必须同时提供匹配的 `--policy-config` 和
 `--policy-source`。所有现存模型的准确路径见上方 checkpoint 注册表。
 
+服务端和控制端必须选择同一个 task/checkpoint；模型不匹配时控制端会拒绝运行。
+`scripts/run_policy.sh` 保留为自动管理服务并启动控制的一键兼容入口。
 `--execute` 才会使能并发送 CPV 命令。任何预检失败都不应绕过。
 
 PICO 遥操和 LeRobot v3 数采位于 `nero_neo_teleop`；数据清理、V3→V2.1、
@@ -79,11 +81,16 @@ PICO 遥操和 LeRobot v3 数采位于 `nero_neo_teleop`；数据清理、V3→V
 ### OSQP + CasADi 正式主路径
 
 ```text
-scripts/run_policy.sh
+scripts/policy_server.sh
+  └─ scripts/run_policy.sh --server-only
+       └─ scripts/bimanual_policy/ensure_bimanual_policy_server.sh start
+
+scripts/run_control.sh
+  └─ scripts/run_policy.sh --no-server-management
   ├─ config/tasks/<task>.toml
   ├─ nero_vla/task_config.py
   ├─ nero_neo_teleop/scripts/can/ensure_can_interface.sh
-  ├─ scripts/bimanual_policy/ensure_bimanual_policy_server.sh
+  ├─ scripts/bimanual_policy/ensure_bimanual_policy_server.sh verify
   └─ policy_runtime.py / right_policy_runtime.py
        └─ 进程内加载 bimanual_guarded_policy_stream.py
           并替换 RTC queue 与 follower
@@ -110,7 +117,9 @@ scripts/run_policy.sh
 
 | 文件 | 用途 |
 |---|---|
-| `scripts/run_policy.sh` | 唯一正式策略入口；选择任务、准备硬件与服务并启动控制。 |
+| `scripts/policy_server.sh` | 启动、查看或停止远程 OpenPI 模型服务；不访问机械臂硬件。 |
+| `scripts/run_control.sh` | 本机控制入口；只验证指定模型已经运行，不启动或切换服务。 |
+| `scripts/run_policy.sh` | 兼容的一键入口；内部仍可同时管理服务和启动控制。 |
 | `config/tasks/*.toml` | 模型、任务文本、horizon 和控制参数 preset。 |
 | `config/paths.env.example` | 本机目录、SDK、策略服务地址模板。复制后形成不入 Git 的 `config/paths.env`。 |
 | `docs/CURRENT_CONTROL_STACK.md` | 当前控制参数、运行规则与验证命令。 |
@@ -189,7 +198,7 @@ cd /home/dev/nero_bimanual_control
 NERO_POLICY_DURATION=45 \
 NERO_FOLLOWER_MAX_VELOCITY_DEG_S=25 \
 NERO_FOLLOWER_MAX_ACCELERATION_DEG_S2=250 \
-./scripts/run_policy.sh --task towel_fold --execute
+./scripts/run_control.sh --task towel_fold --execute
 ```
 
 ## 6. 验证顺序
@@ -206,7 +215,8 @@ cd /home/dev/nero_bimanual_control
 再进行实机预检：
 
 ```bash
-./scripts/run_policy.sh --task towel_fold --preflight-only
+./scripts/policy_server.sh start --task towel_fold
+./scripts/run_control.sh --task towel_fold --preflight-only
 ```
 
 只有确认双 CAN、三路相机、策略服务和 Home 状态全部正确后，才使用 `--execute`。

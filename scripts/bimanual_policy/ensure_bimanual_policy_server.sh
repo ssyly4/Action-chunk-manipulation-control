@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ACTION="${1:-start}"
+case "$ACTION" in
+  start|verify|status|stop) ;;
+  *) echo "usage: $0 [start|verify|status|stop]" >&2; exit 2 ;;
+esac
+
 SERVER="${NERO_POLICY_SERVER:-172.24.1.154}"
 PORT="${NERO_POLICY_PORT:-8000}"
 CONTAINER="${NERO_POLICY_CONTAINER:-cuda12_8_torch_2_9_1_core}"
@@ -17,6 +23,40 @@ LOG="${NERO_POLICY_LOG:-/home/dev/workspace/nero_training/logs/${STAGE_NAME}_pol
 port_open() {
   timeout 2 bash -c "</dev/tcp/${SERVER}/${PORT}" >/dev/null 2>&1
 }
+
+if [[ "$ACTION" == status ]]; then
+  if ! port_open; then
+    echo "[POLICY] stopped: ${SERVER}:${PORT}"
+    exit 1
+  fi
+  ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5 "dev@${SERVER}" \
+    "docker exec '${CONTAINER}' pgrep -af '[s]cripts/serve_policy.py'" || {
+      echo "[POLICY] port ${PORT} is open but no OpenPI process was found" >&2
+      exit 1
+    }
+  exit 0
+fi
+
+if [[ "$ACTION" == stop ]]; then
+  ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5 "dev@${SERVER}" \
+    "docker exec '${CONTAINER}' pkill -f '[s]cripts/serve_policy.py' 2>/dev/null || true"
+  echo "[POLICY] stopped: ${SERVER}:${PORT}"
+  exit 0
+fi
+
+if [[ "$ACTION" == verify ]]; then
+  port_open || {
+    echo "[POLICY] expected service is not listening on ${SERVER}:${PORT}" >&2
+    exit 1
+  }
+  ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5 "dev@${SERVER}" \
+    "pgrep -af '[s]cripts/serve_policy.py.*${CONFIG}.*${CONTAINER_STAGE}' >/dev/null" || {
+      echo "[POLICY] running service does not match config=${CONFIG} checkpoint=${CHECKPOINT}" >&2
+      exit 1
+    }
+  echo "[POLICY] verified: ${SERVER}:${PORT} config=${CONFIG} checkpoint=${CHECKPOINT}"
+  exit 0
+fi
 
 if port_open; then
   if ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5 "dev@${SERVER}" \

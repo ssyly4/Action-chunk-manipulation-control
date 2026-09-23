@@ -12,6 +12,8 @@ POLICY_CONFIG_OVERRIDE=""
 POLICY_SOURCE_OVERRIDE=""
 POLICY_STAGE_NAME_OVERRIDE=""
 POLICY_PROMPT_OVERRIDE=""
+SERVER_ONLY=0
+SERVER_MODE="${NERO_POLICY_SERVER_MODE:-manage}"
 
 usage() {
   cat <<'EOF'
@@ -30,6 +32,8 @@ policy selection:
   --policy-source PATH    Exact server checkpoint path ending in /STEP.
   --stage-name NAME       Optional inference staging name.
   --prompt TEXT           Override the task prompt.
+  --server-only          Start/verify the policy service, then exit.
+  --no-server-management Require the selected service to be running; never switch it.
 EOF
 }
 
@@ -71,6 +75,8 @@ while (($#)); do
       POLICY_PROMPT_OVERRIDE="$1"
       ;;
     --prompt=*) POLICY_PROMPT_OVERRIDE="${1#*=}" ;;
+    --server-only) SERVER_ONLY=1 ;;
+    --no-server-management) SERVER_MODE=verify ;;
     --show-config) SHOW_CONFIG=1 ;;
     --execute) EXECUTE=1 ;;
     --preflight-only) PREFLIGHT=1 ;;
@@ -173,6 +179,17 @@ echo "[FOLLOWER] velocity=${NERO_FOLLOWER_MAX_VELOCITY_DEG_S}deg/s acceleration=
 echo "[RETIME] osqp_fast_path=${NERO_OSQP_FAST_PATH} speculative_recovery=${NERO_OSQP_SPECULATIVE_RECOVERY} casadi_budget=${NERO_CASADI_MAX_SOLVE_SEC}s"
 echo "[RTC] fixed_delay=${NERO_RTC_INFERENCE_DELAY_STEPS}tick guidance=${NERO_RTC_MAX_GUIDANCE_WEIGHT}"
 
+if [[ "$SERVER_ONLY" == 1 ]]; then
+  "$POLICY_ROOT/ensure_bimanual_policy_server.sh" start
+  exit 0
+fi
+
+case "$SERVER_MODE" in
+  manage) "$POLICY_ROOT/ensure_bimanual_policy_server.sh" start ;;
+  verify) "$POLICY_ROOT/ensure_bimanual_policy_server.sh" verify ;;
+  *) echo "[FAIL] invalid NERO_POLICY_SERVER_MODE: $SERVER_MODE" >&2; exit 2 ;;
+esac
+
 LEFT_CAN="${PICO_LEFT_CAN_PORT:-can_left}"
 RIGHT_CAN="${PICO_RIGHT_CAN_PORT:-can_right}"
 LEFT_USB="${PICO_LEFT_CAN_USB_BUS:-1-2.2:1.0}"
@@ -188,8 +205,6 @@ else
   "$TELEOP_ROOT/scripts/can/ensure_can_interface.sh" "$RIGHT_CAN" "$RIGHT_USB"
   COMMON=(--policy-host "$POLICY_HOST" --policy-port "$POLICY_PORT" --left-can virtual_left --right-can "$RIGHT_CAN" --world-camera "$WORLD_CAMERA" --left-wrist-camera virtual_left --right-wrist-camera "$RIGHT_WRIST_CAMERA" --prompt "$NERO_POLICY_PROMPT")
 fi
-
-"$POLICY_ROOT/ensure_bimanual_policy_server.sh"
 
 if [[ "${NERO_POLICY_WARMUP:-1}" == 1 ]]; then
   echo "[POLICY] warming normal and RTC paths without robot commands"
