@@ -7,10 +7,15 @@ SHOW_CONFIG=0
 EXECUTE=0
 PREFLIGHT=0
 PASSTHROUGH=()
+CHECKPOINT_OVERRIDE=""
+POLICY_CONFIG_OVERRIDE=""
+POLICY_SOURCE_OVERRIDE=""
+POLICY_STAGE_NAME_OVERRIDE=""
+POLICY_PROMPT_OVERRIDE=""
 
 usage() {
   cat <<'EOF'
-usage: ./scripts/run_policy.sh [--task NAME] [--show-config] [controller options]
+usage: ./scripts/run_policy.sh [--task NAME] [policy selection] [controller options]
 
 tasks:
   towel_fold          dual-arm towel policy (default)
@@ -18,6 +23,13 @@ tasks:
 
 --show-config prints the resolved task without touching CAN, cameras, or robots.
 Use --preflight-only for full hardware/policy validation without robot commands.
+
+policy selection:
+  --checkpoint STEP       Select another checkpoint in the preset experiment.
+  --policy-config NAME    Override the OpenPI config (requires --policy-source).
+  --policy-source PATH    Exact server checkpoint path ending in /STEP.
+  --stage-name NAME       Optional inference staging name.
+  --prompt TEXT           Override the task prompt.
 EOF
 }
 
@@ -29,6 +41,36 @@ while (($#)); do
       TASK_NAME="$1"
       ;;
     --task=*) TASK_NAME="${1#*=}" ;;
+    --checkpoint)
+      shift
+      [[ $# -gt 0 ]] || { echo "[FAIL] --checkpoint requires a value" >&2; exit 2; }
+      CHECKPOINT_OVERRIDE="$1"
+      ;;
+    --checkpoint=*) CHECKPOINT_OVERRIDE="${1#*=}" ;;
+    --policy-config)
+      shift
+      [[ $# -gt 0 ]] || { echo "[FAIL] --policy-config requires a value" >&2; exit 2; }
+      POLICY_CONFIG_OVERRIDE="$1"
+      ;;
+    --policy-config=*) POLICY_CONFIG_OVERRIDE="${1#*=}" ;;
+    --policy-source)
+      shift
+      [[ $# -gt 0 ]] || { echo "[FAIL] --policy-source requires a value" >&2; exit 2; }
+      POLICY_SOURCE_OVERRIDE="$1"
+      ;;
+    --policy-source=*) POLICY_SOURCE_OVERRIDE="${1#*=}" ;;
+    --stage-name)
+      shift
+      [[ $# -gt 0 ]] || { echo "[FAIL] --stage-name requires a value" >&2; exit 2; }
+      POLICY_STAGE_NAME_OVERRIDE="$1"
+      ;;
+    --stage-name=*) POLICY_STAGE_NAME_OVERRIDE="${1#*=}" ;;
+    --prompt)
+      shift
+      [[ $# -gt 0 ]] || { echo "[FAIL] --prompt requires a value" >&2; exit 2; }
+      POLICY_PROMPT_OVERRIDE="$1"
+      ;;
+    --prompt=*) POLICY_PROMPT_OVERRIDE="${1#*=}" ;;
     --show-config) SHOW_CONFIG=1 ;;
     --execute) EXECUTE=1 ;;
     --preflight-only) PREFLIGHT=1 ;;
@@ -52,6 +94,46 @@ fi
 TASK_FILE="$CONTROL_ROOT/config/tasks/${TASK_NAME}.toml"
 [[ -f "$TASK_FILE" ]] || { echo "[FAIL] unknown task: $TASK_NAME" >&2; usage >&2; exit 2; }
 eval "$(PYTHONPATH="$CONTROL_ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 -m nero_vla.task_config "$TASK_FILE")"
+
+if [[ -n "$POLICY_CONFIG_OVERRIDE" && -z "$POLICY_SOURCE_OVERRIDE" ]]; then
+  echo "[FAIL] --policy-config requires the matching --policy-source" >&2
+  exit 2
+fi
+if [[ -n "$CHECKPOINT_OVERRIDE" && ! "$CHECKPOINT_OVERRIDE" =~ ^[0-9]+$ ]]; then
+  echo "[FAIL] --checkpoint must be numeric" >&2
+  exit 2
+fi
+if [[ -n "$POLICY_SOURCE_OVERRIDE" ]]; then
+  [[ "$POLICY_SOURCE_OVERRIDE" == /* ]] || {
+    echo "[FAIL] --policy-source must be an absolute server path" >&2
+    exit 2
+  }
+  source_step="${POLICY_SOURCE_OVERRIDE##*/}"
+  [[ "$source_step" =~ ^[0-9]+$ ]] || {
+    echo "[FAIL] --policy-source must end in a numeric checkpoint step" >&2
+    exit 2
+  }
+  if [[ -n "$CHECKPOINT_OVERRIDE" && "$CHECKPOINT_OVERRIDE" != "$source_step" ]]; then
+    echo "[FAIL] --checkpoint does not match the end of --policy-source" >&2
+    exit 2
+  fi
+  NERO_POLICY_SOURCE="$POLICY_SOURCE_OVERRIDE"
+  NERO_POLICY_CHECKPOINT="$source_step"
+elif [[ -n "$CHECKPOINT_OVERRIDE" ]]; then
+  NERO_POLICY_SOURCE="${NERO_POLICY_SOURCE%/*}/$CHECKPOINT_OVERRIDE"
+  NERO_POLICY_CHECKPOINT="$CHECKPOINT_OVERRIDE"
+fi
+if [[ -n "$POLICY_CONFIG_OVERRIDE" ]]; then
+  NERO_POLICY_CONFIG="$POLICY_CONFIG_OVERRIDE"
+fi
+if [[ -n "$POLICY_PROMPT_OVERRIDE" ]]; then
+  NERO_POLICY_PROMPT="$POLICY_PROMPT_OVERRIDE"
+fi
+if [[ -n "$POLICY_STAGE_NAME_OVERRIDE" ]]; then
+  NERO_POLICY_STAGE_NAME="$POLICY_STAGE_NAME_OVERRIDE"
+elif [[ -n "$CHECKPOINT_OVERRIDE" || -n "$POLICY_CONFIG_OVERRIDE" || -n "$POLICY_SOURCE_OVERRIDE" ]]; then
+  NERO_POLICY_STAGE_NAME="${NERO_TASK_NAME}_${NERO_POLICY_CONFIG}_${NERO_POLICY_CHECKPOINT}"
+fi
 
 if [[ "$SHOW_CONFIG" == 1 ]]; then
   printf 'task=%s mode=%s runtime=%s\n' "$NERO_TASK_NAME" "$NERO_TASK_MODE" "$NERO_TASK_RUNTIME"

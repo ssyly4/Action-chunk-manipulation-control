@@ -58,6 +58,16 @@ cp config/paths.env.example config/paths.env
 ./scripts/run_policy.sh --task bottle_to_box_right --preflight-only
 ```
 
+切换同一实验内的 checkpoint，不需要修改 TOML：
+
+```bash
+./scripts/run_policy.sh --task towel_fold --checkpoint 96000 --show-config
+./scripts/run_policy.sh --task towel_fold --checkpoint 96000 --preflight-only
+```
+
+切换到另一个训练实验时，必须同时提供匹配的 `--policy-config` 和
+`--policy-source`。所有现存模型的准确路径见上方 checkpoint 注册表。
+
 `--execute` 才会使能并发送 CPV 命令。任何预检失败都不应绕过。
 
 PICO 遥操和 LeRobot v3 数采位于 `nero_neo_teleop`；数据清理、V3→V2.1、
