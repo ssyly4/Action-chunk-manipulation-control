@@ -4,6 +4,9 @@
 
 它不包含 PICO 遥操程序、相机录制程序、数采数据或模型 checkpoint。
 
+从 PICO 数采、数据转换、训练到本仓库实机执行的统一命令见
+[NERO VLA 命令行全流程](https://github.com/ssyly4/NERO_VLA_training/blob/main/docs/END_TO_END_VLA_WORKFLOW.zh-CN.md)。
+
 ```text
 三路相机 + 双臂 CAN 反馈 + 任务文本
                  │
