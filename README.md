@@ -20,11 +20,13 @@
        RTC 计划队列与异步推理调度
                  │
                  ▼
- OSQP 轨迹点平滑 -> CasADi 相位重定时 -> q/v/a 连续交接
+ OSQP 固定时间轴平滑 -> 必要时 CasADi 相位重定时 -> q/v/a 连续交接
                  │
                  ▼
  30 Hz streaming follower -> CPV backend -> CAN -> NERO 双臂
 ```
+
+![NERO 双臂策略控制调用链](docs/control_call_chain.png)
 
 ## 1. 三个本机目录的边界
 
@@ -77,7 +79,7 @@ PICO 遥操和 LeRobot v3 数采位于 `nero_neo_teleop`；数据清理、V3→V
 
 ## 3. 当前实机调用路径
 
-### OSQP + CasADi 正式主路径
+### OSQP 固定时间轴正式主路径
 
 ```text
 scripts/policy_server.sh
@@ -95,7 +97,7 @@ scripts/run_control.sh
           并替换 RTC queue 与 follower
 ```
 
-这样做的目的，是复用已经验证的策略输入、相机与 CPV 运行器，同时在正式进程内接入 OSQP、CasADi、TOPPRA 轨迹处理逻辑。
+这样做的目的，是复用已经验证的策略输入、相机与 CPV 运行器，同时在正式进程内接入 OSQP 轨迹平滑、滚动计划交接和 follower。当 `NERO_OSQP_FAST_PATH=1` 时，正常可行的 chunk 保持原有 30 Hz 时间轴并跳过 CasADi；CasADi 仅在关闭快速路径或需要相位重定时时参与。
 
 ### 每个 30 Hz tick 的数据流
 
@@ -103,12 +105,12 @@ scripts/run_control.sh
 2. `policy_client.py` 将 observation 和任务文本发送到 OpenPI 服务，异步获得 `24 x 16` action chunk。
 3. `osqp_casadi_rtc_queue.py` 管理当前计划、待处理策略 chunk、RTC 请求和接管时刻。
 4. `smoother.py` 仅平滑 14 个机械臂关节轨迹点；两个夹爪 action 保持原始事件时序。
-5. `optimizer.py` 不改关节空间路径，只在固定 horizon 内调整相位推进，使速度、加速度、jerk 更可行。
+5. OSQP 结果已满足约束时直接保持固定 30 Hz 时间轴；否则 `optimizer.py` 可在固定 horizon 内调整相位推进，不改全局 chunk 边界时间。
 6. `receding_toppra_queue.py` 根据当前命令/反馈状态处理 q、v、a 连续交接和安全余量。
 7. `trajectory_executor.py` 的 follower 以 30 Hz 施加速度、加速度、jerk 与 command-feedback governor。
 8. `cpv_backend.py` 检查连续性后逐关节发送 CPV position 命令。
 
-全局时间属于 RTC。OSQP 与 CasADi 可以调整 chunk 内形状或相位，但不能把 24-step horizon 延长或缩短。
+全局时间属于 RTC。OSQP 调整 chunk 内关节轨迹点；可选的 CasADi 调整内部相位。两者都不能把 24-step horizon 延长或缩短。
 
 ## 4. 目录与代码职责
 
@@ -155,7 +157,7 @@ scripts/run_control.sh
 | 路径 | 用途 |
 |---|---|
 | `osqp_waypoint_smoother/waypoint_smoother/smoother.py` | OSQP 凸优化：在 trust region 内平滑策略关节轨迹点，约束速度、加速度、jerk。 |
-| `osqp_waypoint_smoother/runtime/osqp_casadi_rtc_queue.py` | 当前主运行时 queue：串接 OSQP、CasADi、TOPPRA 交接，并处理恢复候选。 |
+| `osqp_waypoint_smoother/runtime/osqp_casadi_rtc_queue.py` | 当前主运行时 queue：优先执行 OSQP 固定时间轴快速路径，必要时接入 CasADi，并处理滚动交接与恢复候选。 |
 | `osqp_waypoint_smoother/runtime/policy_runtime.py` | 运行时注入适配器：动态加载原生策略流，并替换 queue/follower 类。 |
 | `osqp_waypoint_smoother/runtime/right_policy_runtime.py` | 将单右臂 8D 策略接入同一轨迹和 follower 运行时。 |
 | `casadi_fixed_horizon_retimer/fixed_phase_optimizer/optimizer.py` | 固定总时长的相位优化器，支持速度、加速度、jerk 约束和 warm-start。 |
@@ -168,7 +170,7 @@ scripts/run_control.sh
 
 ## 5. 当前可调参数
 
-推荐只通过环境变量调当前 OSQP + CasADi 正式运行时，而不要直接改 Python 默认值：
+推荐只通过环境变量调当前 OSQP 快速路径与滚动交接运行时，而不要直接改 Python 默认值：
 
 | 参数 | 默认值 | 作用 |
 |---|---:|---|
