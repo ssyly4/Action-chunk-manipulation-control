@@ -131,6 +131,8 @@ scripts/run_control.sh
 | `ensure_bimanual_policy_server.sh` | 检查远程 OpenPI 服务；按需要同步并启动指定 checkpoint 的策略服务。 |
 | `bimanual_policy_dry_run.py` | 读取真实 CAN/相机并请求策略，但完全不连接机器人命令 API。 |
 | `run_bimanual_policy_dry_run.sh` | dry-run 的 shell 包装器。 |
+| `bimanual_rtc_warmup.py` | 正式启动前预热并验证双臂策略的普通推理和 RTC 推理路径。 |
+| `right_rtc_warmup.py` | 正式启动前预热并验证单右臂策略的普通推理和 RTC 推理路径。 |
 
 ### 核心控制库：`nero_vla/`
 
@@ -163,15 +165,6 @@ scripts/run_control.sh
 | `toppra_fixed_horizon_retimer/runtime/follower_state_bridge.py` | 在 queue 与 follower 之间共享最后发送命令、速度、加速度和期望速度。 |
 
 每个轨迹目录的 `tests/` 是该层的单元测试；仍保留的 `scripts/` 用于当前 action chunk 离线诊断。旧 overlap-splice 实验和旧实机启动器不保留在 `main`，需要时从 Git 历史恢复。
-
-### 诊断与服务器部署
-
-| 路径 | 用途 |
-|---|---|
-| `scripts/diagnostics/bimanual/bimanual_policy_rtc_probe.py` | 无机器人命令的 RTC 策略延迟和 chunk overlap 探针。 |
-| `scripts/diagnostics/bimanual/bimanual_policy_rtc_stream_dry_run.py` | 模拟策略流与 RTC 消费的 dry-run。 |
-| `scripts/diagnostics/bimanual/bimanual_policy_offline_regression.py` | 已保存 chunk 的离线回归检查。 |
-| `scripts/diagnostics/bimanual/analyze_action_execution_match.py` | 对比策略 action、最终 command 与实测执行状态。 |
 
 ## 5. 当前可调参数
 

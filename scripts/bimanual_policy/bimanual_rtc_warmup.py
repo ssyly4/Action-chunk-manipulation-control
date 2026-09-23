@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline probe for OpenPI Real-Time Chunking. No robot APIs are used."""
+"""Warm and validate the normal and RTC paths of a bimanual OpenPI policy."""
 
 from __future__ import annotations
 
@@ -11,20 +11,34 @@ import sys
 import numpy as np
 
 
-CONTROL_ROOT = Path(__file__).resolve().parents[3]
+CONTROL_ROOT = Path(__file__).resolve().parents[2]
 if str(CONTROL_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_ROOT))
 
 from nero_vla.image_tools import resize_with_pad
 from nero_vla.policy_client import OpenPiPolicyClient, port_open
 
-from bimanual_policy_offline_regression import image_to_rgb_uint8, tensor_to_numpy
-
-
 ACTION_HZ = 30.0
 ACTION_HORIZON = 24
 ACTION_DIM = 16
 JOINT_INDICES = np.r_[0:7, 8:15]
+
+
+def image_to_rgb_uint8(value) -> np.ndarray:
+    array = value.detach().cpu().numpy() if hasattr(value, "detach") else np.asarray(value)
+    if array.ndim != 3:
+        raise ValueError(f"expected image with three dimensions, got {array.shape}")
+    if array.shape[0] == 3:
+        array = np.moveaxis(array, 0, -1)
+    if array.shape[-1] != 3:
+        raise ValueError(f"expected RGB image, got {array.shape}")
+    if array.dtype.kind == "f":
+        array = np.clip(array * 255.0, 0.0, 255.0)
+    return np.asarray(array, dtype=np.uint8)
+
+
+def tensor_to_numpy(value) -> np.ndarray:
+    return np.asarray(value.detach().cpu().numpy() if hasattr(value, "detach") else value)
 
 
 def make_observation(dataset, index: int, prompt: str, noise: np.ndarray, num_steps: int) -> dict:

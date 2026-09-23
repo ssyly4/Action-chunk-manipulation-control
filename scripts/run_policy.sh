@@ -209,9 +209,9 @@ fi
 if [[ "${NERO_POLICY_WARMUP:-1}" == 1 ]]; then
   echo "[POLICY] warming normal and RTC paths without robot commands"
   if [[ "$NERO_TASK_WARMUP" == bimanual ]]; then
-    "$PYTHON" "$CONTROL_ROOT/scripts/diagnostics/bimanual/bimanual_policy_rtc_probe.py" --policy-host "$POLICY_HOST" --policy-port "$POLICY_PORT" --execution-horizon 12 --num-steps 3
+    "$PYTHON" "$POLICY_ROOT/bimanual_rtc_warmup.py" --policy-host "$POLICY_HOST" --policy-port "$POLICY_PORT" --execution-horizon 12 --num-steps 3
   else
-    env PYTHONPATH="$RUNTIME_PYTHONPATH" "$PYTHON" "$CONTROL_ROOT/scripts/diagnostics/right_policy_rtc_warmup.py" --policy-host "$POLICY_HOST" --policy-port "$POLICY_PORT" --action-horizon 16 --execution-horizon 8 --inference-delay "$NERO_RTC_INFERENCE_DELAY_STEPS" --num-steps 3 --max-guidance-weight "$NERO_RTC_MAX_GUIDANCE_WEIGHT" --prompt "$NERO_POLICY_PROMPT"
+    env PYTHONPATH="$RUNTIME_PYTHONPATH" "$PYTHON" "$POLICY_ROOT/right_rtc_warmup.py" --policy-host "$POLICY_HOST" --policy-port "$POLICY_PORT" --action-horizon 16 --execution-horizon 8 --inference-delay "$NERO_RTC_INFERENCE_DELAY_STEPS" --num-steps 3 --max-guidance-weight "$NERO_RTC_MAX_GUIDANCE_WEIGHT" --prompt "$NERO_POLICY_PROMPT"
   fi
 fi
 
