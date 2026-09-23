@@ -8,7 +8,8 @@ OSQP 和 CasADi 都处理**已有的关节轨迹**，不生成任务目标，也
 ## 源码从哪里进入
 
 ```text
-scripts/run_policy.sh --task towel_fold
+scripts/run_control.sh --task towel_fold
+  → scripts/run_policy.sh --no-server-management（内部编排）
   → config/tasks/towel_fold.toml
   → nero_vla/task_config.py
   → trajectory/osqp_waypoint_smoother/runtime/policy_runtime.py

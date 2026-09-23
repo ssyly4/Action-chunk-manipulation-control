@@ -15,4 +15,4 @@
 ./run_tests.sh
 ```
 
-独立 TOPPRA 实机运行器已从主分支移除，可从提交 `08d40f1` 恢复。正式运行统一使用仓库根目录的 `scripts/run_policy.sh`。
+独立 TOPPRA 实机运行器已从主分支移除，可从提交 `08d40f1` 恢复。正式运行先用仓库根目录的 `scripts/policy_server.sh` 启动模型服务，再用 `scripts/run_control.sh` 启动控制。

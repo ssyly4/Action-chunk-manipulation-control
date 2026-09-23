@@ -11,7 +11,7 @@ cd /home/dev/nero_bimanual_control
 查看模型：
 
 ```bash
-./scripts/run_policy.sh --task towel_fold --show-config
+./scripts/run_control.sh --task towel_fold --show-config
 ```
 
 只启动或切换服务器模型，不访问 CAN、相机和机械臂：
@@ -112,15 +112,6 @@ NERO_POLICY_DURATION=20 \
 
 ```bash
 ./scripts/policy_server.sh stop
-```
-
-## 兼容的一键入口
-
-`run_policy.sh` 仍可自动启动或切换服务，再执行本机预检/控制：
-
-```bash
-./scripts/run_policy.sh --task towel_fold --preflight-only
-NERO_POLICY_DURATION=30 ./scripts/run_policy.sh --task towel_fold --execute
 ```
 
 已有模型和 checkpoint 对应关系见

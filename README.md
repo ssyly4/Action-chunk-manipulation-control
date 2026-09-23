@@ -69,7 +69,6 @@ cp config/paths.env.example config/paths.env
 `--policy-source`。所有现存模型的准确路径见上方 checkpoint 注册表。
 
 服务端和控制端必须选择同一个 task/checkpoint；模型不匹配时控制端会拒绝运行。
-`scripts/run_policy.sh` 保留为自动管理服务并启动控制的一键兼容入口。
 `--execute` 才会使能并发送 CPV 命令。任何预检失败都不应绕过。
 
 PICO 遥操和 LeRobot v3 数采位于 `nero_neo_teleop`；数据清理、V3→V2.1、
@@ -119,7 +118,7 @@ scripts/run_control.sh
 |---|---|
 | `scripts/policy_server.sh` | 启动、查看或停止远程 OpenPI 模型服务；不访问机械臂硬件。 |
 | `scripts/run_control.sh` | 本机控制入口；只验证指定模型已经运行，不启动或切换服务。 |
-| `scripts/run_policy.sh` | 兼容的一键入口；内部仍可同时管理服务和启动控制。 |
+| `scripts/run_policy.sh` | 服务端入口和控制端入口共用的内部编排器；不作为日常命令直接调用。 |
 | `config/tasks/*.toml` | 模型、任务文本、horizon 和控制参数 preset。 |
 | `config/paths.env.example` | 本机目录、SDK、策略服务地址模板。复制后形成不入 Git 的 `config/paths.env`。 |
 | `docs/CURRENT_CONTROL_STACK.md` | 当前控制参数、运行规则与验证命令。 |

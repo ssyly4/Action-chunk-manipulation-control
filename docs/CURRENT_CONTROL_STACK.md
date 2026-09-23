@@ -13,8 +13,9 @@
   -> CPV 后端 -> CAN -> NERO 双臂
 ```
 
-当前实机入口为 `scripts/run_policy.sh --task towel_fold`。任务固定参数位于
-`config/tasks/towel_fold.toml`，以下环境变量可在启动时覆盖其默认值：
+当前模型服务入口为 `scripts/policy_server.sh start --task towel_fold`，实机控制入口为
+`scripts/run_control.sh --task towel_fold`。两者必须选择相同的任务和 checkpoint。
+任务固定参数位于 `config/tasks/towel_fold.toml`，以下环境变量可在启动时覆盖其默认值：
 
 | 变量 | 默认值 | 含义 |
 |---|---:|---|
@@ -62,5 +63,6 @@ cd /home/dev/nero_bimanual_control
 实机执行前先做预检：
 
 ```bash
-./scripts/run_policy.sh --task towel_fold --preflight-only
+./scripts/policy_server.sh start --task towel_fold
+./scripts/run_control.sh --task towel_fold --preflight-only
 ```

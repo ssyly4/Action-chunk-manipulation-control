@@ -4,7 +4,9 @@
 
 ```text
 nero_bimanual_control/
-  scripts/run_policy.sh       唯一正式策略启动入口
+  scripts/policy_server.sh    远程模型服务入口
+  scripts/run_control.sh      本机策略控制入口
+  scripts/run_policy.sh       两个入口共用的内部编排器
   config/tasks/               毛巾/单右臂任务 preset
   nero_vla/                 CPV 后端、CAN 检查、follower、策略客户端
   scripts/bimanual_policy/  策略服务与正式运行器的基础编排层
