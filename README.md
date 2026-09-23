@@ -212,3 +212,6 @@ cd /home/dev/nero_bimanual_control
 只有确认双 CAN、三路相机、策略服务和 Home 状态全部正确后，才使用 `--execute`。
 
 更多运行细节见：[当前控制栈](docs/CURRENT_CONTROL_STACK.md)和[仓库目录结构](docs/REPOSITORY_LAYOUT.md)。历史代码可直接从 Git 提交 `82e4461` 恢复，不在当前工作树中保留副本。
+
+Policy 的完整命令行参数、checkpoint 切换、跨 experiment 切换、服务器检查和停止命令见
+[Policy 命令行使用手册](docs/POLICY_CLI.zh-CN.md)。
