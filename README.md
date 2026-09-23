@@ -6,6 +6,8 @@
 
 从 PICO 数采、数据转换、训练到本仓库实机执行的统一命令见
 [NERO VLA 命令行全流程](https://github.com/ssyly4/NERO_VLA_training/blob/main/docs/END_TO_END_VLA_WORKFLOW.zh-CN.md)。
+服务器已有模型、数据语义和 checkpoint 对应关系见
+[checkpoint 注册表](https://github.com/ssyly4/NERO_VLA_training/blob/main/docs/CHECKPOINT_REGISTRY.zh-CN.md)。
 
 ```text
 三路相机 + 双臂 CAN 反馈 + 任务文本
